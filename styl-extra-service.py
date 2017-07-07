@@ -23,9 +23,8 @@ from pyudev.glib import GUDevMonitorObserver as MonitorObserver
 
 MAXTIME = 10
 MOUNT_DIR = "/home/alvin/.extra_service_tmp_dir"
-
-CURRENT_DISK = "None"
-PARTITIONS = []
+STYLAGPS_CONFIG = "stylagps.conf"
+STYLAGPS_LOCATION = "/etc/stylagps/stylagps.conf"
 
 class TimeOut:
     def __init__(self, deadtime):
@@ -47,6 +46,25 @@ def get_from_shell(command):
     for i in range(len(result)):
         result[i] = result[i].strip() # strip out white space #
     return result
+
+def update_geolocation_key(directorys, stylagps_config, stylagps_location):
+    if not directorys and not stylagps_config and not stylagps_location:
+        return False
+
+    for directory in directorys:
+        path = '{0}/{1}'.format(directory, stylagps_config)
+        print 'Path is: {0}'.format(path)
+        if os.path.isfile(path):
+            print 'Found on: {0}'.format(path)
+            command = 'sudo cp {0} {1}'.format(path, stylagps_location)
+            print 'command 1:{0}'.format(command)
+            result = get_from_shell(command)
+            print 'result:{0}'.format(result)
+            if not result:
+                return True
+            else:
+                return False
+    return False
 
 def mount_action(partitions, directory):
     print 'mount_action: partitions:{0}'.format(partitions)
@@ -144,15 +162,20 @@ def device_event(observer, action, dev):
         partitions = add_device_event()
         print '====> partitions: {0}'.format(partitions)
         if partitions:
+
+            # Mount partitions on USB device #
             directorys = mount_action(partitions, MOUNT_DIR)
+
+            # Search and update for Google geolocation API key
+            success = update_geolocation_key(directorys, STYLAGPS_CONFIG, STYLAGPS_LOCATION)
+            if success:
+                print 'Update Google geolocation API key success'
+            else:
+                print 'Update Google geolocation API key fail'
 
             tmp = raw_input('Press any key to continue: ')
 
             umount_action(partitions, directorys)
-            #if success:
-            #    print '************* RM and UMOUNT is OK ****************'
-            #else:
-            #    print '============== RM and UMOUNT is FALSE =============='
         else:
             print 'Nothing to do'
 
