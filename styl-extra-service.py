@@ -17,14 +17,18 @@ import glib
 import os
 import re
 import subprocess
+import dbus, uuid
 from time import sleep
 from pyudev import Context, Monitor
 from pyudev.glib import GUDevMonitorObserver as MonitorObserver
 
 MAXTIME = 10
 MOUNT_DIR = "/home/alvin/.extra_service_tmp_dir"
+
 STYLAGPS_CONFIG = "stylagps.conf"
 STYLAGPS_LOCATION = "/etc/stylagps/stylagps.conf"
+
+WIRELESS_PASSWD = "wireless.passwd"
 
 class TimeOut:
     def __init__(self, deadtime):
@@ -65,6 +69,64 @@ def update_geolocation_key(directorys, stylagps_config, stylagps_location):
             else:
                 return False
     return False
+
+def update_wireless_passwd_connection_new(ssid_string, psk_string):
+    s_con = dbus.Dictionary({
+    'type': '802-11-wireless',
+    'uuid': str(uuid.uuid4()),
+    'id': ssid_string})
+
+    s_wifi = dbus.Dictionary({
+    'ssid': dbus.ByteArray(ssid_string),
+    'mode': 'infrastructure'})
+
+    s_wsec = dbus.Dictionary({
+    'key-mgmt': 'wpa-psk',
+    'auth-alg': 'open',
+    'psk': psk_string})
+
+    s_ip4 = dbus.Dictionary({'method': 'auto'})
+    s_ip6 = dbus.Dictionary({'method': 'ignore'})
+
+    con = dbus.Dictionary({
+    'connection': s_con,
+    '802-11-wireless': s_wifi,
+    '802-11-wireless-security': s_wsec,
+    'ipv4': s_ip4,
+    'ipv6': s_ip6})
+
+    bus = dbus.SystemBus()
+
+    proxy = bus.get_object("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/Settings")
+    settings = dbus.Interface(proxy, "org.freedesktop.NetworkManager.Settings")
+
+    settings.AddConnection(con)
+
+def update_wireless_passwd_file_parse(path):
+    lines = [line.rstrip('\n') for line in open(path)]
+
+    for line in lines:
+        print 'line is: {0}'.format(line)
+        elements = line.split(":")
+        for element in elements:
+            print 'element is: {0}'.format(element)
+        update_wireless_passwd_connection_new(elements[0], elements[1])
+
+
+def update_wireless_passwd(directorys, wireless_passwd):
+    if not directorys:
+        return False
+
+    for directory in directorys:
+        path = '{0}/{1}'.format(directory, wireless_passwd)
+        print 'Path is: {0}'.format(path)
+        if os.path.isfile(path):
+            print 'Found on: {0}'.format(path)
+            ret = update_wireless_passwd_file_parse(path)
+            return ret
+
+    return False
+
 
 def mount_action(partitions, directory):
     print 'mount_action: partitions:{0}'.format(partitions)
@@ -172,6 +234,13 @@ def device_event(observer, action, dev):
                 print 'Update Google geolocation API key success'
             else:
                 print 'Update Google geolocation API key fail'
+
+            # Search and update for Wireless password
+            success = update_wireless_passwd(directorys, WIRELESS_PASSWD)
+            if success:
+                print 'Update Wireless password success'
+            else:
+                print 'Update Wireless password fail'
 
             tmp = raw_input('Press any key to continue: ')
 
