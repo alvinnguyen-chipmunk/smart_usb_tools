@@ -17,13 +17,15 @@ import glib
 import os
 import re
 import subprocess
+from time import sleep
 from pyudev import Context, Monitor
 from pyudev.glib import GUDevMonitorObserver as MonitorObserver
 
-MAXTIME = 1
+MAXTIME = 10
 MOUNT_DIR = "/home/alvin/.extra_service_tmp_dir"
 
 CURRENT_DISK = "None"
+PARTITIONS = []
 
 class TimeOut:
     def __init__(self, deadtime):
@@ -50,43 +52,52 @@ def mount_action(partitions, directory):
     print 'mount_action: partitions:{0}'.format(partitions)
     print 'mount_action: directory:{0}'.format(directory)
 
-    dirlist = []
+    directorys = []
     number = 0
     for partition in partitions:
         print 'partition iter {0}: {1}'.format(number, partition)
-        tmp = '{0}_{1}'.format(MOUNT_DIR, number)
-        print 'tmp {0}: {1}'.format(number, tmp)
-        dirlist.append(tmp)
+        directory = '{0}_{1}'.format(MOUNT_DIR, number)
+        print 'directory {0}: {1}'.format(number, directory)
+        command = 'mkdir -p {0}'.format(directory)
+        print 'command 1:{0}'.format(command)
+        result = get_from_shell(command)
+        print 'result:{0}'.format(result)
+        if not result:
+            command = 'sudo mount {0} {1}'.format(partition, directory)
+            print 'command 2:{0}'.format(command)
+            result = get_from_shell(command)
+            print 'result:{0}'.format(result)
+            if not result and os.path.ismount(directory):
+                print 'directorys 1:{0}'.format(directorys)
+                directorys.append(directory)
+                print 'directorys 2:{0}'.format(directorys)
         number += 1
 
-    print 'dirlist: {0}'.format(dirlist)
+    print 'OK ===> directorys: {0}'.format(directorys)
 
-    if os.path.exists(directory):
-        return False
-    command = 'mkdir -p {0}'.format(directory)
-    print 'command:{0}'.format(command)
-    result = get_from_shell(command)
-    print 'result:{0}'.format(result)
-    if result:
-        return False
-    # Mount part
+    return directorys
 
-    return True
+def umount_action(partitions, directorys):
+    print 'unmount_action: partitions:{0}'.format(partitions)
+    print 'unmount_action: directorys:{0}'.format(directorys)
 
-def umount_action(partitions, directory):
-    print 'unmount_action: device:{0}'.format(partitions)
-    print 'unmount_action: directory:{0}'.format(directory)
-    command = 'rm -rf {0}'.format(directory)
-    print 'command:{0}'.format(command)
-    result = get_from_shell(command)
-    print 'result:{0}'.format(result)
-    if result:
-        return False
+    for partition in partitions:
+        print 'partition: {0}'.format(partition)
+        command = 'sudo umount {0}'.format(partition)
+        print 'command 1:{0}'.format(command)
+        result = get_from_shell(command)
+        print 'result:{0}'.format(result)
 
-    return True
+    for directory in directorys:
+        print 'directory: {0}'.format(directory)
+        command = 'rm -rf {0}'.format(directory)
+        print 'command 1:{0}'.format(command)
+        result = get_from_shell(command)
+        print 'result:{0}'.format(result)
 
 def add_device_event():
     timeout = TimeOut(MAXTIME)
+    sleep(3) # sleep waiting USB driver do completed
     while True:
         removable = [device for device in context.list_devices(subsystem='block', DEVTYPE='disk') if device.attributes.asstring('removable') == "1"]
         if removable or not timeout.OnTime():
@@ -107,11 +118,7 @@ def add_device_event():
     return None
 
 def remove_device_event():
-        timeout = TimeOut(MAXTIME)
-        while True:
-            print 'alvinnguyen '
-            if not timeout.OnTime():
-                break
+    print 'remove usb'
 
 def device_event(observer, action, dev):
 
@@ -120,20 +127,32 @@ def device_event(observer, action, dev):
     print 'Processing for event {0} on dev {1} .....'.format(action, dev)
 
     if action == 'add':
-        print 'dev.device_node:  {0}'.format(dev.device_node)
+        #print 'dev.device_node:  {0}'.format(dev.device_node)
+        #print 'dev.sys_number:  {0}'.format(dev.sys_number)
+        #print 'dev.sys_name:  {0}'.format(dev.sys_name)
+        #print 'dev.context:  {0}'.format(dev.context)
+        #print 'dev.sys_path:  {0}'.format(dev.sys_path)
+        #print 'dev.device_number:  {0}'.format(dev.device_number)
+        #print 'dev.device_links:  {0}'.format(dev.device_links)
+        #print 'dev.device_type:  {0}'.format(dev.device_type)
+        #print 'dev.children:  {0}'.format(dev.children)
+        check = dev.device_type
+        print 'check:  {0}'.format(check)
+        if check != 'usb_interface':
+            return
+
         partitions = add_device_event()
         print '====> partitions: {0}'.format(partitions)
         if partitions:
-            success = mount_action(partitions, MOUNT_DIR)
-            if success:
-                print '************* MKDIR and MOUNT is OK ****************'
-            else:
-                print '============== MKDIR and MOUNT is FALSE =============='
-            success = umount_action(partitions, MOUNT_DIR)
-            if success:
-                print '************* RM and UMOUNT is OK ****************'
-            else:
-                print '============== RM and UMOUNT is FALSE =============='
+            directorys = mount_action(partitions, MOUNT_DIR)
+
+            tmp = raw_input('Press any key to continue: ')
+
+            umount_action(partitions, directorys)
+            #if success:
+            #    print '************* RM and UMOUNT is OK ****************'
+            #else:
+            #    print '============== RM and UMOUNT is FALSE =============='
         else:
             print 'Nothing to do'
 
