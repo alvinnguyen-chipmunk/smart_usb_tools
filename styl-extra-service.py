@@ -18,6 +18,7 @@ import time
 import glib
 import os
 import re
+import sys
 import subprocess
 import dbus, uuid
 from time import sleep
@@ -63,10 +64,16 @@ def update_geolocation_key(directorys, stylagps_config, stylagps_location):
         return False
 
     for directory in directorys:
+        print 'update_geolocation_key: directory is: {0}'.format(directory)
+        print 'update_geolocation_key: stylagps_config is: {0}'.format(stylagps_config)
         path = find_file_in_path(stylagps_config, directory)
         print 'Path is: {0}'.format(path)
         if path:
             print 'Found on: {0}'.format(path)
+            command = 'sudo mv {0} {1}.bak'.format(stylagps_location, stylagps_location)
+            print 'command 1:{0}'.format(command)
+            result = get_from_shell(command)
+            print 'result:{0}'.format(result)
             command = 'sudo cp {0} {1}'.format(path, stylagps_location)
             print 'command 1:{0}'.format(command)
             result = get_from_shell(command)
@@ -189,7 +196,7 @@ def umount_action(partitions, directorys):
 
 def add_device_event():
     timeout = TimeOut(MAXTIME)
-    sleep(3) # sleep waiting USB driver do completed
+    sleep(2) # sleep waiting USB driver do completed
     while True:
         removable = [device for device in context.list_devices(subsystem='block', DEVTYPE='disk') if device.attributes.asstring('removable') == "1"]
         if removable or not timeout.OnTime():
@@ -233,6 +240,10 @@ def device_event(observer, action, dev):
         if check != 'usb_interface':
             return
 
+        sys.stdout.flush()
+        sys.stdin.flush()
+        sys.stderr.flush()
+
         partitions = add_device_event()
         print '====> partitions: {0}'.format(partitions)
         if partitions:
@@ -254,7 +265,8 @@ def device_event(observer, action, dev):
             else:
                 print 'Update Wireless password fail'
 
-            tmp = raw_input('Press any key to continue: ')
+            # tmp = raw_input('Press any key to continue: ')
+            sleep(1)
 
             umount_action(partitions, directorys)
         else:
