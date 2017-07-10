@@ -15,7 +15,6 @@
 
 import pyudev
 import time
-import glib
 import os
 import re
 import sys
@@ -23,7 +22,6 @@ import subprocess
 import dbus, uuid
 from time import sleep
 from pyudev import Context, Monitor
-from pyudev.glib import GUDevMonitorObserver as MonitorObserver
 
 MAXTIME = 10
 MOUNT_DIR = ".extra_service_tmp_dir"
@@ -219,23 +217,23 @@ def add_device_event():
 def remove_device_event():
     print 'remove usb'
 
-def device_event(observer, action, dev):
+def device_event(device):
 
     success = True
 
-    print 'Processing for event {0} on dev {1} .....'.format(action, dev)
+    print 'Processing for event {0} on device {1} .....'.format(device.action, device)
 
-    if action == 'add':
-        #print 'dev.device_node:  {0}'.format(dev.device_node)
-        #print 'dev.sys_number:  {0}'.format(dev.sys_number)
-        #print 'dev.sys_name:  {0}'.format(dev.sys_name)
-        #print 'dev.context:  {0}'.format(dev.context)
-        #print 'dev.sys_path:  {0}'.format(dev.sys_path)
-        #print 'dev.device_number:  {0}'.format(dev.device_number)
-        #print 'dev.device_links:  {0}'.format(dev.device_links)
-        #print 'dev.device_type:  {0}'.format(dev.device_type)
-        #print 'dev.children:  {0}'.format(dev.children)
-        check = dev.device_type
+    if device.action == 'add':
+        #print 'device.device_node:  {0}'.format(device.device_node)
+        #print 'device.sys_number:  {0}'.format(device.sys_number)
+        #print 'device.sys_name:  {0}'.format(device.sys_name)
+        #print 'device.context:  {0}'.format(device.context)
+        #print 'device.sys_path:  {0}'.format(device.sys_path)
+        #print 'device.device_number:  {0}'.format(device.device_number)
+        #print 'device.device_links:  {0}'.format(device.device_links)
+        #print 'device.device_type:  {0}'.format(device.device_type)
+        #print 'device.children:  {0}'.format(device.children)
+        check = device.device_type
         print 'check:  {0}'.format(check)
         if check != 'usb_interface':
             return
@@ -272,10 +270,10 @@ def device_event(observer, action, dev):
         else:
             print 'Nothing to do'
 
-    if action == 'remove':
+    if device.action == 'remove':
         remove_device_event()
 
-    print 'Processing for event {0} on dev {1} .... Done.'.format(action, dev)
+    print 'Processing for event {0} on device {1} .... Done.'.format(device.action, device)
 
 
 if __name__ == '__main__':
@@ -285,15 +283,14 @@ if __name__ == '__main__':
     MOUNT_DIR = '{0}/{1}'.format(home_dir, MOUNT_DIR)
     print 'MOUNT_DIR: {0}'.format(MOUNT_DIR)
 
-    context = Context()
-    monitor = Monitor.from_netlink(context)
-
-    monitor.filter_by(subsystem='usb')
-    observer = MonitorObserver(monitor)
-
-    observer.connect('device-event', device_event)
+    context = pyudev.Context()
+    monitor = pyudev.Monitor.from_netlink(context)
+    monitor.filter_by(subsystem='usb')  # Remove this line to listen for all devices.
     monitor.start()
 
-    glib.MainLoop().run()
+    for device in iter(monitor.poll, None):
+        print('{0.action} on {0.device_path}'.format(device))
+        device_event(device)
+
 
     print 'Exit service script .......'
