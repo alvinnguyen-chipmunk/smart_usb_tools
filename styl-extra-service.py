@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 ##################################################################################################################################
 ##      Styl-extra-service.py : Python script will to do:                                                                       ##
 ##              - Detect USB plugin then mount it                                                                               ##
@@ -23,7 +25,7 @@ from pyudev import Context, Monitor
 from pyudev.glib import GUDevMonitorObserver as MonitorObserver
 
 MAXTIME = 10
-MOUNT_DIR = "/home/alvin/.extra_service_tmp_dir"
+MOUNT_DIR = ".extra_service_tmp_dir"
 
 STYLAGPS_CONFIG = "stylagps.conf"
 STYLAGPS_LOCATION = "/etc/stylagps/stylagps.conf"
@@ -39,6 +41,11 @@ class TimeOut:
             return False
         else:
             return True
+
+def find_file_in_path(name, path):
+    for root, dirs, files in os.walk(path):
+        if name in files:
+            return os.path.join(root, name)
 
 # Used as a quick way to handle shell commands #
 def get_from_shell_raw(command):
@@ -56,9 +63,9 @@ def update_geolocation_key(directorys, stylagps_config, stylagps_location):
         return False
 
     for directory in directorys:
-        path = '{0}/{1}'.format(directory, stylagps_config)
+        path = find_file_in_path(stylagps_config, directory)
         print 'Path is: {0}'.format(path)
-        if os.path.isfile(path):
+        if path:
             print 'Found on: {0}'.format(path)
             command = 'sudo cp {0} {1}'.format(path, stylagps_location)
             print 'command 1:{0}'.format(command)
@@ -71,6 +78,9 @@ def update_geolocation_key(directorys, stylagps_config, stylagps_location):
     return False
 
 def update_wireless_passwd_connection_new(ssid_string, psk_string):
+    print 'update_wireless_passwd_connection_new - ssid: {0}'.format(ssid_string)
+    print 'update_wireless_passwd_connection_new - psk: {0}'.format(psk_string)
+
     s_con = dbus.Dictionary({
     'type': '802-11-wireless',
     'uuid': str(uuid.uuid4()),
@@ -111,6 +121,8 @@ def update_wireless_passwd_file_parse(path):
         for element in elements:
             print 'element is: {0}'.format(element)
         update_wireless_passwd_connection_new(elements[0], elements[1])
+        return True
+    return False
 
 
 def update_wireless_passwd(directorys, wireless_passwd):
@@ -118,9 +130,9 @@ def update_wireless_passwd(directorys, wireless_passwd):
         return False
 
     for directory in directorys:
-        path = '{0}/{1}'.format(directory, wireless_passwd)
+        path = find_file_in_path(wireless_passwd, directory)
         print 'Path is: {0}'.format(path)
-        if os.path.isfile(path):
+        if path:
             print 'Found on: {0}'.format(path)
             ret = update_wireless_passwd_file_parse(path)
             return ret
@@ -256,6 +268,10 @@ def device_event(observer, action, dev):
 
 if __name__ == '__main__':
     print 'Start service script .......'
+
+    home_dir = os.path.expanduser("~")
+    MOUNT_DIR = '{0}/{1}'.format(home_dir, MOUNT_DIR)
+    print 'MOUNT_DIR: {0}'.format(MOUNT_DIR)
 
     context = Context()
     monitor = Monitor.from_netlink(context)
