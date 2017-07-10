@@ -125,9 +125,8 @@ def update_wireless_passwd_file_parse(path):
         elements = line.split(":")
         for element in elements:
             print 'element is: {0}'.format(element)
-            update_wireless_passwd_connection_new(elements[0], elements[1])
-            return True
-    return False
+        update_wireless_passwd_connection_new(elements[0], elements[1])
+    return True
 
 
 def update_wireless_passwd(directorys, wireless_passwd):
