@@ -1,2 +1,2 @@
-chmod +x styl-extra-service.py
-./styl-extra-service.py
+chmod +x yellowfin-extra-service.py
+./yellowfin-extra-service.py

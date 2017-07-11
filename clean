@@ -8,3 +8,5 @@ sudo umount /dev/sdf1
 sudo umount /dev/sdf2
 
 rm -rf /home/alvin/.extra_service_tmp_dir_*
+
+nmcli c del id "STYLVN_L1_01_5GHz"
