@@ -1,0 +1,11 @@
+[Unit]
+Description=STYL Extra service
+Requires=dbus.service
+After=styl-system-startup.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python /home/root/yellowfin-extra-service.py
+
+[Install]
+WantedBy=multi-user.target
