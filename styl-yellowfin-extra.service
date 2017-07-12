@@ -1,11 +1,11 @@
 [Unit]
-Description=STYL Extra service
+Description=STYL Yellowfin Extra service - update EMV's configure, STYLAGPS's configure, Wireless Connection
 Requires=dbus.service
 After=styl-system-startup.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python /home/root/yellowfin-extra-service.py
+ExecStart=/usr/bin/python /home/root/extra-service/yellowfin-extra-service.py
 
 [Install]
 WantedBy=multi-user.target
