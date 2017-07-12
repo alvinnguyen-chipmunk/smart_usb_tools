@@ -14,13 +14,10 @@
 ##################################################################################################################################
 
 import pyudev
-import time
 import os
-import re
-import sys
 import subprocess
 import dbus, uuid
-from time import sleep
+from time import time, sleep
 from pyudev import Context, Monitor
 
 MOUNT_DIR = ".extra_service_tmp_dir"
@@ -36,6 +33,12 @@ CHECK_FSTYPE_1 = "OEM-ID \"mkfs.fat\""
 CHECK_FSTYPE_2 = "FAT"
 
 CHECK_FSTYPE = False
+
+CONNECTION_PATH = None
+
+bus = dbus.SystemBus()
+
+
 # ################################################################################################################################################## #
 class TimeOut:
     def __init__(self, deadtime):
@@ -98,12 +101,60 @@ def update_wireless_passwd_connection_new(ssid_string, psk_string):
 
     print con
 
-    bus = dbus.SystemBus()
+    proxy = bus.get_object("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/Settings")
+    settings = dbus.Interface(proxy, "org.freedesktop.NetworkManager.Settings")
+    nm = dbus.Interface(proxy, "org.freedesktop.NetworkManager")
+
+    settings.AddConnection(con)
+
+def update_wireless_passwd_connection_change_secrets_in_one_setting(proxy, config, setting_name, new_secret):
+    # Add new secret values to the connection config
+    secrets = proxy.GetSecrets(setting_name)
+    print "Current secrets:", secrets
+
+    for setting in secrets:
+        for key in secrets[setting]:
+            config[setting_name][key] = new_secret.rstrip()
+
+
+def update_wireless_passwd_connection_change_secrets(con_path, config, new_secret):
+    # Get existing secrets; we grab the secrets for each type of connection
+    # (since there isn't a "get all secrets" call because most of the time
+    # you only need 'wifi' secrets or '802.1x' secrets, not everything) and
+    # set new values into the connection settings (config)
+    con_proxy = bus.get_object("org.freedesktop.NetworkManager", con_path)
+    connection_secrets = dbus.Interface(con_proxy, "org.freedesktop.NetworkManager.Settings.Connection")
+    update_wireless_passwd_connection_change_secrets_in_one_setting(connection_secrets, config, '802-11-wireless-security', new_secret)
+
+def update_wireless_passwd_connection_find_by_name(name):
+    # Ask the settings service for the list of connections it provides
+    global CONNECTION_PATH
 
     proxy = bus.get_object("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/Settings")
     settings = dbus.Interface(proxy, "org.freedesktop.NetworkManager.Settings")
+    connection_paths = settings.ListConnections()
 
-    settings.AddConnection(con)
+    # Get the settings and look for connection's name
+    for path in connection_paths:
+        con_proxy = bus.get_object("org.freedesktop.NetworkManager", path)
+        connection = dbus.Interface(con_proxy, "org.freedesktop.NetworkManager.Settings.Connection")
+        try:
+            config = connection.GetSettings()
+        except Exception, e:
+            pass
+
+        # Find connection by the id
+        s_con = config['connection']
+        if name == s_con['id']:
+            CONNECTION_PATH = path
+            return config
+        # Find connection by the uuid
+        if name == s_con['uuid']:
+            CONNECTION_PATH = path
+            return config
+
+    return None
+
 
 def update_wireless_passwd(directory, wireless_passwd):
     if not directory and not wireless_passwd:
@@ -115,10 +166,25 @@ def update_wireless_passwd(directory, wireless_passwd):
         print 'Found on: {0}'.format(path)
         lines = [line.rstrip('\n') for line in open(path)]
         elements = line.split(":")
-        if len(elements)==2:
-            update_wireless_passwd_connection_new(elements[0], elements[1])
-            return True
+        if len(elements)!=2:
+            return False
 
+        connection = update_wireless_passwd_connection_find_by_name(elements[0])
+
+        if connection:
+            print "ENTER UPDATE *****************************"
+            # update secrets then update connection
+            update_wireless_passwd_connection_change_secrets(CONNECTION_PATH, connection, elements[1])
+            # Change the connection with Update()
+            proxy = bus.get_object("org.freedesktop.NetworkManager", CONNECTION_PATH)
+            settings = dbus.Interface(proxy, "org.freedesktop.NetworkManager.Settings.Connection")
+            settings.Update(connection)
+        else:
+            print "ENTER NEW *****************************"
+            # create a new connection
+            update_wireless_passwd_connection_new(elements[0], elements[1])
+
+        return True
     return False
 # ################################################################################################################################################## #
 
@@ -137,13 +203,13 @@ def update_geolocation_key(directory, stylagps_config, stylagps_location):
     if path:
         print 'Found on: {0}'.format(path)
         command = '{2} mv {0} {1}.bak'.format(stylagps_location, stylagps_location, SU)
-        print 'command 1:{0}'.format(command)
+        print 'command 1: {0}'.format(command)
         result = get_from_shell(command)
         print 'result:{0}'.format(result)
         command = '{2} cp {0} {1}'.format(path, stylagps_location, SU)
-        print 'command 1:{0}'.format(command)
+        print 'command 1: {0}'.format(command)
         result = get_from_shell(command)
-        print 'result:{0}'.format(result)
+        print 'result: {0}'.format(result)
         if not result:
             return True
         else:
