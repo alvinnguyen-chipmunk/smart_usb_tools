@@ -20,21 +20,29 @@ import dbus, uuid
 from time import time, sleep
 from pyudev import Context, Monitor
 
-MOUNT_DIR = ".extra_service_tmp_dir"
+MOUNT_DIR           = ".extra_service_tmp_dir"
 
-STYLAGPS_CONFIG = "stylagps.conf"
-STYLAGPS_LOCATION = "/etc/stylagps/stylagps.conf"
+STYLAGPS_CONFIG     = "stylagps.conf"
+STYLAGPS_LOCATION   = "/etc/stylagps/stylagps.conf"
 
-WIRELESS_PASSWD = "wireless.passwd"
+WIRELESS_PASSWD     = "wireless.passwd"
 
-SU = "sudo"
+EMV_CONFIG_DIR      = "emv"
+EMV_LOCATION        = "/home/root/emv"
+EMV_LOAD_CONFIG_SH  = "emv_load_config.sh"
+
+SU = ""
 
 CHECK_FSTYPE_1 = "OEM-ID \"mkfs.fat\""
 CHECK_FSTYPE_2 = "FAT"
 
-CHECK_FSTYPE = False
+
+
+CHECK_FSTYPE = True
 
 CONNECTION_PATH = None
+
+
 
 bus = dbus.SystemBus()
 
@@ -54,6 +62,13 @@ def find_file_in_path(name, path):
     for root, dirs, files in os.walk(path):
         if name in files:
             return os.path.join(root, name)
+    return None
+
+def find_dir_in_path(name, path):
+    for root, dirs, files in os.walk(path):
+        if name in dirs:
+            return os.path.join(root, name)
+    return None
 
 # Used as a quick way to handle shell commands #
 def get_from_shell_raw(command):
@@ -65,6 +80,51 @@ def get_from_shell(command):
     for i in range(len(result)):
         result[i] = result[i].strip() # strip out white space #
     return result
+# ################################################################################################################################################## #
+
+# ################################################################################################################################################## #
+def update_emv_configure(directory, emv_config_dir, emv_location, emv_load_config_sh):
+    if not directory or not emv_config_dir or not emv_location:
+        return False
+
+    emv_loader = '{0}/{1}'.format(emv_location, emv_load_config_sh)
+
+    if not os.path.exists(emv_location) or not os.path.exists(emv_loader):
+        return False
+
+    new_config_dir = find_dir_in_path(directory, emv_config_dir)
+    if not new_config_dir:
+        return False
+
+    # Remove all *.json files in old EMV configure directory
+    command = '{1} rm {0}/*.json'.format(emv_location, SU)
+    print 'update_emv_configure: command 1: {0}'.format(command)
+    result = get_from_shell(command)
+    print 'update_emv_configure: result: {0}'.format(result)
+    if result:
+        return False
+
+    # Copy all *.json files in new_config_dir to old EMV configure directory
+    command = '{2} cp {0}/*.json {1}'.format(new_config_dir, emv_location, SU)
+    print 'update_emv_configure: command 2: {0}'.format(command)
+    result = get_from_shell(command)
+    print 'update_emv_configure: result: {0}'.format(result)
+    if result:
+        return False
+
+    # Run emv_loader to load all *.json files to reader
+    command = '{0}'.format(emv_loader)
+    print 'update_emv_configure: command 3: {0}'.format(command)
+    result = get_from_shell(command)
+    print 'update_emv_configure: result: {0}'.format(result)
+    if result:
+        return False
+
+    return True
+
+
+
+
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
@@ -116,6 +176,7 @@ def update_wireless_passwd_connection_change_secrets_in_one_setting(proxy, confi
         for key in secrets[setting]:
             config[setting_name][key] = new_secret.rstrip()
 
+    print "Updated secrets:", secrets
 
 def update_wireless_passwd_connection_change_secrets(con_path, config, new_secret):
     # Get existing secrets; we grab the secrets for each type of connection
@@ -157,7 +218,7 @@ def update_wireless_passwd_connection_find_by_name(name):
 
 
 def update_wireless_passwd(directory, wireless_passwd):
-    if not directory and not wireless_passwd:
+    if not directory or not wireless_passwd:
         return False
 
     path = find_file_in_path(wireless_passwd, directory)
@@ -190,7 +251,7 @@ def update_wireless_passwd(directory, wireless_passwd):
 
 # ################################################################################################################################################## #
 def update_geolocation_key(directory, stylagps_config, stylagps_location):
-    if not directory and not stylagps_config and not stylagps_location:
+    if not directory or not stylagps_config or not stylagps_location:
         return False
 
     if not os.path.exists(stylagps_location):
@@ -314,6 +375,12 @@ def device_event(device):
                     print 'Update Wireless password success'
                 else:
                     print 'Update Wireless password fail'
+
+                success = update_emv_configure(MOUNT_DIR, EMV_CONFIG_DIR, EMV_LOCATION, EMV_LOAD_CONFIG_SH)
+                if success:
+                    print 'Update EMV configure success'
+                else:
+                    print 'Update EMV configure fail'
 
                 sleep(1)
 
