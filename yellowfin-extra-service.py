@@ -30,7 +30,7 @@ STYLAGPS_LOCATION = "/etc/stylagps/stylagps.conf"
 
 WIRELESS_PASSWD = "wireless.passwd"
 
-SU = ""
+SU = "sudo"
 # ################################################################################################################################################## #
 class TimeOut:
     def __init__(self, deadtime):
@@ -70,30 +70,35 @@ def update_wireless_passwd_connection_new(ssid_string, psk_string):
     'id': ssid_string})
 
     s_wifi = dbus.Dictionary({
-    'ssid': dbus.ByteArray(ssid_string),
-    'mode': 'infrastructure'})
+        'ssid': dbus.ByteArray(ssid_string),
+        'mode': 'infrastructure',
+    })
 
     s_wsec = dbus.Dictionary({
-    'key-mgmt': 'wpa-psk',
-    'auth-alg': 'open',
-    'psk': psk_string})
+        'key-mgmt': 'wpa-psk',
+        'auth-alg': 'open',
+        'psk': psk_string.rstrip(),
+    })
 
     s_ip4 = dbus.Dictionary({'method': 'auto'})
     s_ip6 = dbus.Dictionary({'method': 'ignore'})
 
-    connection = dbus.Dictionary({
-    'connection': s_con,
-    '802-11-wireless': s_wifi,
-    '802-11-wireless-security': s_wsec,
-    'ipv4': s_ip4,
-    'ipv6': s_ip6})
+    con = dbus.Dictionary({
+        'connection': s_con,
+        '802-11-wireless': s_wifi,
+        '802-11-wireless-security': s_wsec,
+        'ipv4': s_ip4,
+        'ipv6': s_ip6
+         })
+
+    print con
 
     bus = dbus.SystemBus()
 
     proxy = bus.get_object("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/Settings")
     settings = dbus.Interface(proxy, "org.freedesktop.NetworkManager.Settings")
 
-    settings.AddConnection(connection)
+    settings.AddConnection(con)
 
 def update_wireless_passwd(directory, wireless_passwd):
     if not directory and not wireless_passwd:
@@ -117,7 +122,7 @@ def update_geolocation_key(directory, stylagps_config, stylagps_location):
     if not directory and not stylagps_config and not stylagps_location:
         return False
 
-    if not os.path.exist(stylagps_location
+    if not os.path.exists(stylagps_location):
         return False
 
     print 'update_geolocation_key: directory is: {0}'.format(directory)
