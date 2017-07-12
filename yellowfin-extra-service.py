@@ -31,6 +31,11 @@ STYLAGPS_LOCATION = "/etc/stylagps/stylagps.conf"
 WIRELESS_PASSWD = "wireless.passwd"
 
 SU = "sudo"
+
+CHECK_FSTYPE_1 = "OEM-ID \"mkfs.fat\""
+CHECK_FSTYPE_2 = "FAT"
+
+CHECK_FSTYPE = False
 # ################################################################################################################################################## #
 class TimeOut:
     def __init__(self, deadtime):
@@ -166,6 +171,20 @@ def mount_action(partition, directory):
     print 'mount_action: partitions:{0}'.format(partition)
     print 'mount_action: directory:{0}'.format(directory)
 
+    if CHECK_FSTYPE:
+        command = '{1} file -s {0}'.format(partition, SU)
+        print 'mount_action: command: {0}'.format(command)
+        result = get_from_shell(command)
+        print 'mount_action: result: {0}'.format(result)
+        print 'mount_action: len esult: {0}'.format(len(result))
+        if not result:
+            return False
+
+        #if result[0].find(CHECK_FSTYPE_1)==-1:
+        #    return False
+        if result[0].find(CHECK_FSTYPE_2)==-1:
+            return False
+
     command = 'mkdir -p {0}'.format(directory)
     print 'mount_action: command: {0}'.format(command)
     result = get_from_shell(command)
@@ -202,6 +221,8 @@ def device_event(device):
         print 'device.device_type:  {0}'.format(device.device_type)
         print 'device.children:  {0}'.format(device.children)
         print 'device.subsystem: {0}'.format(device.subsystem)
+        print 'device.sys_name: {0}'.format(device.sys_name)
+
         check = device.device_type
         print 'check:  {0}'.format(check)
         if check != 'partition':
