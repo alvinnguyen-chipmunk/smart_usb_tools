@@ -80,19 +80,49 @@ def get_from_shell(command):
     for i in range(len(result)):
         result[i] = result[i].strip() # strip out white space #
     return result
+
+def bash_command(command):
+    result = subprocess.check_call(['bash', command])
+    return result
+
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
+def update_emv_configure_systemd_service_togle(is_start):
+
+    systemd1 = bus.get_object('org.freedesktop.systemd1',  '/org/freedesktop/systemd1')
+    manager = dbus.Interface(systemd1, 'org.freedesktop.systemd1.Manager')
+
+    try:
+        if is_start:
+            manager.RestartUnit('styl-readersvcd.service', 'fail')
+        else:
+            manager.StopUnit('styl-readersvcd.service', 'fail')
+
+        return True
+
+    except:
+        return False
+
+
 def update_emv_configure(directory, emv_config_dir, emv_location, emv_load_config_sh):
     if not directory or not emv_config_dir or not emv_location:
         return False
 
+    print 'update_emv_configure: directory: {0}'.format(directory)
+    print 'update_emv_configure: emv_config_dir: {0}'.format(emv_config_dir)
+    print 'update_emv_configure: emv_location: {0}'.format(emv_location)
+    print 'update_emv_configure: emv_load_config_sh: {0}'.format(emv_load_config_sh)
+
+
     emv_loader = '{0}/{1}'.format(emv_location, emv_load_config_sh)
+    print 'emv_loader: {0}'.format(emv_loader)
 
     if not os.path.exists(emv_location) or not os.path.exists(emv_loader):
         return False
 
-    new_config_dir = find_dir_in_path(directory, emv_config_dir)
+    new_config_dir = find_dir_in_path(emv_config_dir, directory)
+    print 'new_config_dir: {0}'.format(new_config_dir)
     if not new_config_dir:
         return False
 
@@ -112,12 +142,20 @@ def update_emv_configure(directory, emv_config_dir, emv_location, emv_load_confi
     if result:
         return False
 
+    # Start readersvcd service
+    if not update_emv_configure_systemd_service_togle(True):
+        return False
+
     # Run emv_loader to load all *.json files to reader
     command = '{0}'.format(emv_loader)
     print 'update_emv_configure: command 3: {0}'.format(command)
-    result = get_from_shell(command)
+    result = bash_command(command)
     print 'update_emv_configure: result: {0}'.format(result)
-    if result:
+
+    # Stop readersvcd service
+    update_emv_configure_systemd_service_togle(False)
+
+    if result != 0:
         return False
 
     return True
@@ -375,6 +413,11 @@ def device_event(device):
                     print 'Update Wireless password success'
                 else:
                     print 'Update Wireless password fail'
+
+                print 'MOUNT_DIR: {0}'.format(MOUNT_DIR)
+                print 'EMV_CONFIG_DIR: {0}'.format(EMV_CONFIG_DIR)
+                print 'EMV_LOCATION: {0}'.format(EMV_LOCATION)
+                print 'EMV_LOAD_CONFIG_SH: {0}'.format(EMV_LOAD_CONFIG_SH)
 
                 success = update_emv_configure(MOUNT_DIR, EMV_CONFIG_DIR, EMV_LOCATION, EMV_LOAD_CONFIG_SH)
                 if success:
