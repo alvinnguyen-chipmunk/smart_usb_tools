@@ -28,20 +28,22 @@ def StylLedInit():
 def StylLedSetSingle():
 
     # LED 1
-    CurrentPortVal = bus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0)
-    CurrentPortVal = (CurrentPortVal & 0x00F8) | YELLOW_COLOR
+    #CurrentPortVal = bus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0)
+    #CurrentPortVal = (CurrentPortVal & 0x00F8) | YELLOW_COLOR
+
+    CurrentPortVal = YELLOW_COLOR
 
     retval = bus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, CurrentPortVal)
 
     # LED 2
-    CurrentPortVal = bus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0)
-    CurrentPortVal = (CurrentPortVal & 0x00C7) | (YELLOW_COLOR << 3)
+    #CurrentPortVal = bus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0)
+    #CurrentPortVal = (CurrentPortVal & 0x00C7) | (YELLOW_COLOR << 3)
 
-    retval = bus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, CurrentPortVal)
+    #retval = bus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, CurrentPortVal)
 
     # LED 3
-    CurrentPortVal = bus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1)
-    CurrentPortVal = (CurrentPortVal & 0x00F8) | YELLOW_COLOR;
+    #CurrentPortVal = bus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1)
+    #CurrentPortVal = (CurrentPortVal & 0x00F8) | YELLOW_COLOR;
 
     retval = bus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, CurrentPortVal)
 
