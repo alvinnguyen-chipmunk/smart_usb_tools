@@ -36,13 +36,13 @@ SU = ""
 CHECK_FSTYPE_1 = "OEM-ID \"mkfs.fat\""
 CHECK_FSTYPE_2 = "FAT"
 
-
-
 CHECK_FSTYPE = True
-
 CONNECTION_PATH = None
 
-
+class Error:
+    SUCCESS = 1
+    FAIL    = 2
+    NONE    = 3
 
 bus = dbus.SystemBus()
 
@@ -107,32 +107,31 @@ def update_emv_configure_systemd_service_togle(is_start):
 
 def update_emv_configure(directory, emv_config_dir, emv_location, emv_load_config_sh):
     if not directory or not emv_config_dir or not emv_location:
-        return False
+        return Error.FAIL
 
     print 'update_emv_configure: directory: {0}'.format(directory)
     print 'update_emv_configure: emv_config_dir: {0}'.format(emv_config_dir)
     print 'update_emv_configure: emv_location: {0}'.format(emv_location)
     print 'update_emv_configure: emv_load_config_sh: {0}'.format(emv_load_config_sh)
 
+    new_config_dir = find_dir_in_path(emv_config_dir, directory)
+    print 'new_config_dir: {0}'.format(new_config_dir)
+    if not new_config_dir:
+        return Error.NONE
 
     emv_loader = '{0}/{1}'.format(emv_location, emv_load_config_sh)
     print 'emv_loader: {0}'.format(emv_loader)
 
     if not os.path.exists(emv_location) or not os.path.exists(emv_loader):
-        return False
-
-    new_config_dir = find_dir_in_path(emv_config_dir, directory)
-    print 'new_config_dir: {0}'.format(new_config_dir)
-    if not new_config_dir:
-        return False
+        return Error.FAIL
 
     # Remove all *.json files in old EMV configure directory
-    command = '{1} rm {0}/*.json'.format(emv_location, SU)
+    command = '{1} rm -rf {0}/*.json'.format(emv_location, SU)
     print 'update_emv_configure: command 1: {0}'.format(command)
     result = get_from_shell(command)
     print 'update_emv_configure: result: {0}'.format(result)
     if result:
-        return False
+        return Error.FAIL
 
     # Copy all *.json files in new_config_dir to old EMV configure directory
     command = '{2} cp {0}/*.json {1}'.format(new_config_dir, emv_location, SU)
@@ -140,11 +139,11 @@ def update_emv_configure(directory, emv_config_dir, emv_location, emv_load_confi
     result = get_from_shell(command)
     print 'update_emv_configure: result: {0}'.format(result)
     if result:
-        return False
+        return Error.FAIL
 
     # Start readersvcd service
     if not update_emv_configure_systemd_service_togle(True):
-        return False
+        return Error.FAIL
 
     # Run emv_loader to load all *.json files to reader
     command = '{0}'.format(emv_loader)
@@ -156,9 +155,9 @@ def update_emv_configure(directory, emv_config_dir, emv_location, emv_load_confi
     update_emv_configure_systemd_service_togle(False)
 
     if result != 0:
-        return False
+        return Error.FAIL
 
-    return True
+    return Error.SUCCESS
 
 
 
@@ -257,7 +256,7 @@ def update_wireless_passwd_connection_find_by_name(name):
 
 def update_wireless_passwd(directory, wireless_passwd):
     if not directory or not wireless_passwd:
-        return False
+        return Error.FAIL
 
     path = find_file_in_path(wireless_passwd, directory)
     print 'Path is: {0}'.format(path)
@@ -266,7 +265,7 @@ def update_wireless_passwd(directory, wireless_passwd):
         lines = [line.rstrip('\n') for line in open(path)]
         elements = line.split(":")
         if len(elements)!=2:
-            return False
+            return Error.FAIL
 
         connection = update_wireless_passwd_connection_find_by_name(elements[0])
 
@@ -283,17 +282,17 @@ def update_wireless_passwd(directory, wireless_passwd):
             # create a new connection
             update_wireless_passwd_connection_new(elements[0], elements[1])
 
-        return True
-    return False
+        return Error.SUCCESS
+    return Error.FAIL
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
 def update_geolocation_key(directory, stylagps_config, stylagps_location):
     if not directory or not stylagps_config or not stylagps_location:
-        return False
+        return Error.FAIL
 
     if not os.path.exists(stylagps_location):
-        return False
+        return Error.NONE
 
     print 'update_geolocation_key: directory is: {0}'.format(directory)
     print 'update_geolocation_key: stylagps_config is: {0}'.format(stylagps_config)
@@ -310,11 +309,12 @@ def update_geolocation_key(directory, stylagps_config, stylagps_location):
         result = get_from_shell(command)
         print 'result: {0}'.format(result)
         if not result:
-            return True
+            return Error.SUCCESS
         else:
-            return False
+            return Error.FAIL
+    else:
+        return Error.NONE
 
-    return False
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
@@ -398,32 +398,35 @@ def device_event(device):
 
         if partition:
 
-            # Mount partitions on USB device #
+            # Mount partitions on USB device
             if mount_action(partition, MOUNT_DIR):
+
                 # Search and update for Google geolocation API key
-                success = update_geolocation_key(MOUNT_DIR, STYLAGPS_CONFIG, STYLAGPS_LOCATION)
-                if success:
-                    print 'Update Google geolocation API key success'
-                else:
+                state = update_geolocation_key(MOUNT_DIR, STYLAGPS_CONFIG, STYLAGPS_LOCATION)
+                if state == Error.FAIL:
+                    success = False
                     print 'Update Google geolocation API key fail'
+                elif state == Error.SUCCESS:
+                    print 'Update Google geolocation API key success'
+                elif state == Error.NONE:
+                    print 'Not found GEOLOCATION configure'
 
                 # Search and update for Wireless password
-                success = update_wireless_passwd(MOUNT_DIR, WIRELESS_PASSWD)
-                if success:
-                    print 'Update Wireless password success'
-                else:
-                    print 'Update Wireless password fail'
+                state = update_wireless_passwd(MOUNT_DIR, WIRELESS_PASSWD)
+                if state == Error.FAIL:
+                    success = False
+                    print 'Update Wireless information fail'
+                elif state == Error.SUCCESS:
+                    print 'Update Wireless information success'
 
-                print 'MOUNT_DIR: {0}'.format(MOUNT_DIR)
-                print 'EMV_CONFIG_DIR: {0}'.format(EMV_CONFIG_DIR)
-                print 'EMV_LOCATION: {0}'.format(EMV_LOCATION)
-                print 'EMV_LOAD_CONFIG_SH: {0}'.format(EMV_LOAD_CONFIG_SH)
-
-                success = update_emv_configure(MOUNT_DIR, EMV_CONFIG_DIR, EMV_LOCATION, EMV_LOAD_CONFIG_SH)
-                if success:
-                    print 'Update EMV configure success'
-                else:
-                    print 'Update EMV configure fail'
+                state = update_emv_configure(MOUNT_DIR, EMV_CONFIG_DIR, EMV_LOCATION, EMV_LOAD_CONFIG_SH)
+                if state == Error.FAIL:
+                    success = False
+                    print 'Update EMV Configure fail'
+                elif state == Error.SUCCESS:
+                    print 'Update EMV Configure success'
+                elif state == Error.NONE:
+                    print 'Not found EMV Configure in mmc'
 
                 sleep(1)
 
