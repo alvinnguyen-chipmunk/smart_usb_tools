@@ -19,33 +19,60 @@ import subprocess
 import dbus, uuid
 from time import time, sleep
 from pyudev import Context, Monitor
+import smbus
 
-MOUNT_DIR           = ".extra_service_tmp_dir"
+# Mount global variable
+MOUNT_DIR                   = ".extra_service_tmp_dir"
+CHECK_FSTYPE_1              = "OEM-ID \"mkfs.fat\""
+CHECK_FSTYPE_2              = "FAT"
+CHECK_FSTYPE                = True
 
-STYLAGPS_CONFIG     = "stylagps.conf"
-STYLAGPS_LOCATION   = "/etc/stylagps/stylagps.conf"
+# STYLAGPS global variable
+STYLAGPS_CONFIG             = "stylagps.conf"
+STYLAGPS_LOCATION           = "/etc/stylagps/stylagps.conf"
 
-WIRELESS_PASSWD     = "wireless.passwd"
+# Wireless global variable
+WIRELESS_PASSWD             = "wireless.passwd"
+CONNECTION_PATH             = None
 
-EMV_CONFIG_DIR      = "emv"
-EMV_LOCATION        = "/home/root/emv"
-EMV_LOAD_CONFIG_SH  = "emv_load_config.sh"
+# EMV global variable
+EMV_CONFIG_DIR              = "emv"
+EMV_LOCATION                = "/home/root/emv"
+EMV_LOAD_CONFIG_SH          = "emv_load_config.sh"
 
-SU = ""
+# LED global variable
+STYL_LED_BOARD_I2C_ADDRESS  = 0x20
+PD9535_CONFIG_REG_PORT0     = 0x06
+PD9535_CONFIG_REG_PORT1     = 0x07
 
-CHECK_FSTYPE_1 = "OEM-ID \"mkfs.fat\""
-CHECK_FSTYPE_2 = "FAT"
+PD9535_OUT_REG_PORT0        = 0x02
+PD9535_OUT_REG_PORT1        = 0x03
 
-CHECK_FSTYPE = True
-CONNECTION_PATH = None
+PD9535_CONFIG_OUT_PORT      = 0x00
 
+
+
+# Return value class
 class Error:
-    SUCCESS = 1
-    FAIL    = 2
-    NONE    = 3
+    SUCCESS     = 1
+    FAIL        = 2
+    NONE        = 3
 
-bus = dbus.SystemBus()
+class LED_COLOR:
+    SUCCESS_COLOR = 0x01
+    FAILURE_COLOR = 0x02
+    MOUNT_COLOR   = 0x05
+    NONE_COLOR    = 0x06
+    RUNNING_COLOR = 0x07
 
+class LED:
+    AGPS = 1
+    WIFI = 2
+    EMV  = 3
+
+# DBUS global variable
+bus     = dbus.SystemBus()
+msbus   = smbus.SMBus(0)        # 0 = /dev/i2c-0 (port I2C0), 1 = /dev/i2c-1 (port I2C1)
 
 # ################################################################################################################################################## #
 class TimeOut:
@@ -88,6 +115,53 @@ def bash_command(command):
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
+def led_alert_init():
+    print 'enter led_alert_init'
+    try:
+        ret = msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_CONFIG_REG_PORT0, PD9535_CONFIG_OUT_PORT)
+        ret = msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_CONFIG_REG_PORT1, PD9535_CONFIG_OUT_PORT)
+
+    except:
+        print 'Initialization I2C LED : FAILURED'
+
+def led_alert_set(light_index, light_color):
+    light_value = -1
+    try:
+        if  light_index == LED.AGPS:
+            light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
+            light_value = (light_value & 0x00F8) | light_color
+            retval = msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)
+        elif light_index == LED.WIFI:
+            light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
+            light_value = (light_value & 0x00C7) | (light_color << 3)
+            retval = msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)
+        elif light_index == LED.EMV:
+            light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1);
+            light_value = (light_value & 0x00F8) | light_color
+            retval = msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value)
+        print 'retval: {0}'.format(retval)
+
+    except:
+        print 'Set light color for I2C LED : FAILURED'
+
+def led_alert_set_all(light_color):
+    led_alert_set(LED.AGPS, light_color)
+    led_alert_set(LED.WIFI, light_color)
+    led_alert_set(LED.EMV , light_color)
+
+def led_alert_do(state, index, string):
+    if state == Error.FAIL:
+        led_alert_set(index, LED_COLOR.FAILURE_COLOR)
+        print 'Update {0} fail'.format(string)
+    elif state == Error.SUCCESS:
+        led_alert_set(index, LED_COLOR.SUCCESS_COLOR)
+        print 'Update {0} success'.format(string)
+    elif state == Error.NONE:
+        led_alert_set(index, LED_COLOR.NONE_COLOR)
+        print 'Not found {0}'.format(string)
+# ################################################################################################################################################## #
+
+# ################################################################################################################################################## #
 def update_emv_configure_systemd_service_togle(is_start):
 
     systemd1 = bus.get_object('org.freedesktop.systemd1',  '/org/freedesktop/systemd1')
@@ -99,10 +173,10 @@ def update_emv_configure_systemd_service_togle(is_start):
         else:
             manager.StopUnit('styl-readersvcd.service', 'fail')
 
-        return True
-
     except:
         return False
+
+    return True
 
 
 def update_emv_configure(directory, emv_config_dir, emv_location, emv_load_config_sh):
@@ -126,7 +200,7 @@ def update_emv_configure(directory, emv_config_dir, emv_location, emv_load_confi
         return Error.FAIL
 
     # Remove all *.json files in old EMV configure directory
-    command = '{1} rm -rf {0}/*.json'.format(emv_location, SU)
+    command = 'rm -rf {0}/*.json'.format(emv_location)
     print 'update_emv_configure: command 1: {0}'.format(command)
     result = get_from_shell(command)
     print 'update_emv_configure: result: {0}'.format(result)
@@ -134,7 +208,7 @@ def update_emv_configure(directory, emv_config_dir, emv_location, emv_load_confi
         return Error.FAIL
 
     # Copy all *.json files in new_config_dir to old EMV configure directory
-    command = '{2} cp {0}/*.json {1}'.format(new_config_dir, emv_location, SU)
+    command = 'cp {0}/*.json {1}'.format(new_config_dir, emv_location)
     print 'update_emv_configure: command 2: {0}'.format(command)
     result = get_from_shell(command)
     print 'update_emv_configure: result: {0}'.format(result)
@@ -158,10 +232,6 @@ def update_emv_configure(directory, emv_config_dir, emv_location, emv_load_confi
         return Error.FAIL
 
     return Error.SUCCESS
-
-
-
-
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
@@ -300,11 +370,11 @@ def update_geolocation_key(directory, stylagps_config, stylagps_location):
     print 'Path is: {0}'.format(path)
     if path:
         print 'Found on: {0}'.format(path)
-        command = '{2} mv {0} {1}.bak'.format(stylagps_location, stylagps_location, SU)
+        command = 'mv {0} {1}.bak'.format(stylagps_location, stylagps_location)
         print 'command 1: {0}'.format(command)
         result = get_from_shell(command)
         print 'result:{0}'.format(result)
-        command = '{2} cp {0} {1}'.format(path, stylagps_location, SU)
+        command = 'cp {0} {1}'.format(path, stylagps_location)
         print 'command 1: {0}'.format(command)
         result = get_from_shell(command)
         print 'result: {0}'.format(result)
@@ -322,7 +392,7 @@ def umount_action(partition, directory):
     print 'unmount_action: partition:{0}'.format(partition)
     print 'unmount_action: directories:{0}'.format(directory)
 
-    command = '{1} umount {0}'.format(partition, SU)
+    command = 'umount {0}'.format(partition)
     print 'umount_action: command 1: {0}'.format(command)
     result = get_from_shell(command)
     print 'umount_action: result: {0}'.format(result)
@@ -337,11 +407,11 @@ def mount_action(partition, directory):
     print 'mount_action: directory:{0}'.format(directory)
 
     if CHECK_FSTYPE:
-        command = '{1} file -s {0}'.format(partition, SU)
+        command = 'file -s {0}'.format(partition)
         print 'mount_action: command: {0}'.format(command)
         result = get_from_shell(command)
         print 'mount_action: result: {0}'.format(result)
-        print 'mount_action: len esult: {0}'.format(len(result))
+        print 'mount_action: len result: {0}'.format(len(result))
         if not result:
             return False
 
@@ -349,13 +419,15 @@ def mount_action(partition, directory):
         #    return False
         if result[0].find(CHECK_FSTYPE_2)==-1:
             return False
+        else:
+            print 'found {0}'.format(CHECK_FSTYPE_2)
 
     command = 'mkdir -p {0}'.format(directory)
     print 'mount_action: command: {0}'.format(command)
     result = get_from_shell(command)
     print 'mount_action: result: {0}'.format(result)
     if not result:
-        command = '{2} mount {0} {1}'.format(partition, directory, SU)
+        command = 'mount {0} {1}'.format(partition, directory)
         print 'mount_action: command: {0}'.format(command)
         result = get_from_shell(command)
         print 'result:{0}'.format(result)
@@ -397,44 +469,37 @@ def device_event(device):
         print '====> partition: {0}'.format(partition)
 
         if partition:
-
+            # Initialization I2C LED
+            led_alert_init()
+            # Set running state for I2C LED
+            led_alert_set_all(LED_COLOR.RUNNING_COLOR)
             # Mount partitions on USB device
+            print 'partition: {0}'.format(partition)
+            print 'MOUNT_DIR: {0}'.format(MOUNT_DIR)
             if mount_action(partition, MOUNT_DIR):
 
                 # Search and update for Google geolocation API key
                 state = update_geolocation_key(MOUNT_DIR, STYLAGPS_CONFIG, STYLAGPS_LOCATION)
-                if state == Error.FAIL:
-                    success = False
-                    print 'Update Google geolocation API key fail'
-                elif state == Error.SUCCESS:
-                    print 'Update Google geolocation API key success'
-                elif state == Error.NONE:
-                    print 'Not found GEOLOCATION configure'
+                led_alert_do(state, LED.AGPS, 'Google geolocation API key')
 
                 # Search and update for Wireless password
                 state = update_wireless_passwd(MOUNT_DIR, WIRELESS_PASSWD)
-                if state == Error.FAIL:
-                    success = False
-                    print 'Update Wireless information fail'
-                elif state == Error.SUCCESS:
-                    print 'Update Wireless information success'
+                led_alert_do(state, LED.WIFI, 'Wifi information')
 
+                # Search and update for EMV configure
                 state = update_emv_configure(MOUNT_DIR, EMV_CONFIG_DIR, EMV_LOCATION, EMV_LOAD_CONFIG_SH)
-                if state == Error.FAIL:
-                    success = False
-                    print 'Update EMV Configure fail'
-                elif state == Error.SUCCESS:
-                    print 'Update EMV Configure success'
-                elif state == Error.NONE:
-                    print 'Not found EMV Configure in mmc'
+                led_alert_do(state, LED.EMV, 'EMV Configure')
 
+                # Done, now umount for this partition
                 sleep(1)
-
                 umount_action(partition, MOUNT_DIR)
+
+            else:
+                led_alert_set_all(LED_COLOR.MOUNT_COLOR)
         else:
             print '************** Nothing to do ******************'
 
-    if device.action == 'remove':
+    elif device.action == 'remove':
         remove_device_event()
 
     print 'Processing for event {0} on device {1} .... Done.'.format(device.action, device)
