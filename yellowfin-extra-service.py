@@ -102,8 +102,11 @@ def find_dir_in_path(name, path):
 
 # Used as a quick way to handle shell commands #
 def get_from_shell_raw(command):
-    p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    return p.stdout.readlines()
+    try:
+        p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        return p.stdout.readlines()
+    except:
+        return 'Error when execute "{0}"'.format(command)
 
 def get_from_shell(command):
     result = get_from_shell_raw(command)
@@ -112,8 +115,11 @@ def get_from_shell(command):
     return result
 
 def bash_command(command):
-    result = subprocess.check_call(['bash', command])
-    return result
+    try:
+        result = subprocess.check_call(['bash', command])
+        return result
+    except:
+        return -1
 
 # ################################################################################################################################################## #
 
