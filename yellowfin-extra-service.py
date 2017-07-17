@@ -50,7 +50,9 @@ PD9535_OUT_REG_PORT1        = 0x03
 
 PD9535_CONFIG_OUT_PORT      = 0x00
 
-
+#
+SVC_APP             = "svc"
+USE_SVC_SYSTEMD     = False
 
 # Return value class
 class Error:
@@ -170,9 +172,17 @@ def update_emv_configure_systemd_service_togle(is_start):
 
     try:
         if is_start:
-            manager.RestartUnit('styl-readersvcd.service', 'fail')
+            command = 'ps auwx | grep -in "{0}" | grep -v grep'.format(SVC_APP)
+            print 'update_emv_configure_systemd_service_togle: command: {0}'.format(command)
+            result = get_from_shell(command)
+            print 'update_emv_configure_systemd_service_togle: result: {0}'.format(result)
+            if not result:
+                USE_SVC_SYSTEMD = True
+                manager.RestartUnit('styl-readersvcd.service', 'fail')
         else:
-            manager.StopUnit('styl-readersvcd.service', 'fail')
+            if USE_SVC_SYSTEMD:
+                manager.StopUnit('styl-readersvcd.service', 'fail')
+                USE_SVC_SYSTEMD = False
 
     except:
         return False
