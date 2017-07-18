@@ -341,7 +341,7 @@ def update_wireless_passwd(directory, wireless_passwd):
             # create a new connection
             update_wireless_passwd_connection_new(elements[0], elements[1])
         return Error.SUCCESS
-    return Error.FAIL
+    return Error.NONE
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
@@ -379,12 +379,12 @@ def mount_action(partition, directory):
         result = get_from_shell(command)
         print 'mount_action: result: {0}'.format(result)
         if not result:
-            return False
+            return Error.FAIL
 
         #if result[0].find(CHECK_FSTYPE_1)==-1:
         #    return False
         if result[0].find(CHECK_FSTYPE_2)==-1:
-            return False
+            return Error.NONE
         else:
             print 'Found a partition with {0} type'.format(CHECK_FSTYPE_2)
 
@@ -396,17 +396,19 @@ def mount_action(partition, directory):
         result = get_from_shell(command)
         print 'mount_action: mount: result: {0}'.format(result)
         if not result and os.path.ismount(directory):
-            return True
-    return False
+            return Error.SUCCESS
+    return Error.FAIL
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
 def remove_device_event():
+    led_alert_init()
     led_alert_set_all(LED_COLOR.OFF_COLOR)
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
 def device_event(device):
+
     if device.action == 'add':
         check = device.device_type
         if check != 'partition':
@@ -417,13 +419,13 @@ def device_event(device):
         if partition:
             # Initialization I2C LED
             led_alert_init()
-            # Set running state for I2C LED
-            led_alert_set_all(LED_COLOR.RUNNING_COLOR)
             # Mount partitions on USB device
             print 'partition: {0}'.format(partition)
             print 'MOUNT_DIR: {0}'.format(MOUNT_DIR)
-            if mount_action(partition, MOUNT_DIR):
-
+            state = mount_action(partition, MOUNT_DIR)
+            if state==Error.SUCCESS:
+                # Set running state for I2C LED
+                led_alert_set_all(LED_COLOR.RUNNING_COLOR)
                 # Search and update for Google geolocation API key
                 state = update_geolocation_key(MOUNT_DIR, STYLAGPS_CONFIG, STYLAGPS_LOCATION)
                 led_alert_do(state, LED.AGPS, 'Google geolocation API key')
@@ -440,10 +442,15 @@ def device_event(device):
                 sleep(1)
                 umount_action(partition, MOUNT_DIR)
 
-            else:
+            elif state==Error.FAIL:
                 led_alert_set_all(LED_COLOR.MOUNT_COLOR)
+            elif state==Error.NONE:
+                print 'Not found FAT partition in device.'
 
     elif device.action == 'remove':
+        check = device.device_type
+        if check != 'partition':
+            return
         remove_device_event()
 # ################################################################################################################################################## #
 
