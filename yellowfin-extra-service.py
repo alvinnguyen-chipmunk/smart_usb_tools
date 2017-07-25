@@ -43,6 +43,11 @@ EMV_LOAD_CONFIG_SH          = "emv_load_config.sh"
 SVC_APP                     = "svc"
 USE_SVC_SYSTEMD             = False
 
+# TestTool global variable
+TT_PATTERN                  = "yellowfin_test_tool"
+TT_LOCATION                 = "/usr/bin/BVFactoryTestTool"
+TT_OPTION                   = "--platform linuxfb"
+
 # LED global variable
 STYL_LED_BOARD_I2C_ADDRESS  = 0x20
 PD9535_CONFIG_REG_PORT0     = 0x06
@@ -112,6 +117,10 @@ def get_from_shell(command):
     result = get_from_shell_raw(command)
     for i in range(len(result)):
         result[i] = result[i].strip() # strip out white space #
+    return result
+
+def exec_command(command):
+    result = subprocess.Popen(command, shell=True, stdout=None, stderr=None)
     return result
 
 def bash_command(command):
@@ -345,6 +354,22 @@ def update_wireless_passwd(directory, wireless_passwd):
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
+def execute_testtool_configure(directory, tt_pattern, tt_location, tt_option):
+    if not directory or not tt_pattern or not tt_location or not tt_option:
+        return Error.FAIL
+    if not os.path.exists(tt_location):
+        return Error.NONE
+    path = find_file_in_path(tt_pattern, directory)
+    if path:
+        command = '{0} {1}'.format(tt_location, tt_option)
+        print 'command: {0}'.format(command)
+        result = exec_command(command)
+        return Error.SUCCESS
+    else:
+        return Error.NONE
+# ################################################################################################################################################## #
+
+# ################################################################################################################################################## #
 def update_geolocation_key(directory, stylagps_config, stylagps_location):
     if not directory or not stylagps_config or not stylagps_location:
         return Error.FAIL
@@ -437,6 +462,10 @@ def device_event(device):
                 # Search and update for EMV configure
                 state = update_emv_configure(MOUNT_DIR, EMV_CONFIG_DIR, EMV_LOCATION, EMV_LOAD_CONFIG_SH)
                 led_alert_do(state, LED.EMV, 'EMV Configure')
+
+                # Search and run test tool
+                state = execute_testtool_configure(MOUNT_DIR, TT_PATTERN, TT_LOCATION, TT_OPTION)
+                led_alert_do(state, LED.EMV, 'TestTool Execute')
 
                 # Done, now umount for this partition
                 sleep(1)
