@@ -18,6 +18,7 @@ import pyudev
 import os
 import subprocess
 import dbus, uuid
+import hashlib, re
 from time import time, sleep
 from pyudev import Context, Monitor
 import smbus
@@ -37,11 +38,14 @@ WIRELESS_PASSWD             = "wireless.passwd"
 CONNECTION_PATH             = None
 
 # EMV global variable
+EMV_FLAG                    = "emv_flag"
 EMV_CONFIG_DIR              = "emv"
 EMV_LOCATION                = "/home/root/emv"
 EMV_LOAD_CONFIG_SH          = "emv_load_config.sh"
 SVC_APP                     = "svc"
 USE_SVC_SYSTEMD             = False
+MD5_FILE                    = "checksum-md5"
+EMV_FLAG_PATH               = "/home/root/emv/update"
 
 # TestTool global variable
 TT_PATTERN                  = "yellowfin_test_tool"
@@ -130,6 +134,13 @@ def bash_command(command):
     except:
         return -1
 
+def checkcall_command(command):
+    try:
+        result = subprocess.check_call([command])
+        return result
+    except:
+        return -1
+
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
@@ -199,8 +210,7 @@ def update_emv_configure_systemd_service_togle(is_start):
 
     return True
 
-
-def update_emv_configure(directory, emv_config_dir, emv_location, emv_load_config_sh):
+def prepare_update_emv_configure(directory, emv_config_dir, emv_location, emv_load_config_sh, md5_file):
     if not directory or not emv_config_dir or not emv_location:
         return Error.FAIL
 
@@ -218,27 +228,91 @@ def update_emv_configure(directory, emv_config_dir, emv_location, emv_load_confi
     if result:
         return Error.FAIL
 
+    # Gen md5 checksum information
+    os.chdir(new_config_dir)
+    command = 'md5sum * > {0}'.format(MD5_FILE)
+    exec_command(command)
+    command = '{0}/(1)'.format(new_config_dir, MD5_FILE)
+    if not os.path.exist(new_config_dir):
+        return Error.FAIL
+
     # Copy all *.json files in new_config_dir to old EMV configure directory
     command = 'cp {0}/*.json {1}'.format(new_config_dir, emv_location)
     result = get_from_shell(command)
     if result:
         return Error.FAIL
 
+    # Copy checksum file in new_config_dir to old EMV configure directory
+    command = 'cp {0}/{1} {2}'.format(new_config_dir, MD5_FILE, emv_location)
+    result = get_from_shell(command)
+    if result:
+        return Error.FAIL
+
+    ---- sync here ----
+
+    return Error.SUCCESS
+
+def check_update_emv_configure(emv_location, emv_flag):
+    if not emv_location or not emv_flag:
+        return False
+
+    emv_checker = '{0}/{1}'.format(emv_location, emv_flag)
+
+    if not os.path.exists(emv_location) or not os.path.exists(emv_checker):
+        return False
+
+    lines = [line.rstrip('\n') for line in open(emv_checker)]
+    if len(lines)!=1:
+        return False
+
+    if lines[0] == '1':
+        return True
+
+    return False
+
+
+def update_emv_configure(emv_location, emv_load_config_sh, md5_file):
+    if not directory or not emv_config_dir or not emv_location or not md5_file:
+        return Error.FAIL
+
     # Start readersvcd service
     if not update_emv_configure_systemd_service_togle(True):
         return Error.FAIL
+
+    #verify checksum
+    os.chdir(emv_location)
+    lines = [line.rstrip('\n') for line in open(md5_file)]
+    for line in lines:
+        elements = re.findall(r"[\w']+", line)
+        print 'len(elements): {0}'.format(len(elements))
+        print 'elements[0]: {0}'.format(elements[0])
+        print 'elements[1]: {0}'.format(elements[1])
+        # Correct original md5 goes here
+        original_md5 = elements[0]
+        file_name = elements[1]
+        with open(file_name) as file_to_check:
+                # read contents of the file
+                data = file_to_check.read()
+                # pipe contents of the file through
+                md5_returned = hashlib.md5(data).hexdigest()
+        if original_md5 == md5_returned:
+                print "MD5 verified."
+        else:
+                print "MD5 verification failed!."
+                return Error.FAIL
 
     # Run emv_loader to load all *.json files to reader
     command = '{0}'.format(emv_loader)
     result = bash_command(command)
 
+    if result == '0':
+        return Error.FAIL
+    esle:
+        return Error.SUCCESS
+
     # Stop readersvcd service
     update_emv_configure_systemd_service_togle(False)
 
-    if result != 0:
-        return Error.FAIL
-
-    return Error.SUCCESS
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
@@ -333,23 +407,24 @@ def update_wireless_passwd(directory, wireless_passwd):
     path = find_file_in_path(wireless_passwd, directory)
     if path:
         lines = [line.rstrip('\n') for line in open(path)]
-        elements = line.split(":")
-        if len(elements)!=2:
-            return Error.FAIL
-        connection = update_wireless_passwd_connection_find_by_name(elements[0])
-        if connection:
-            print "WIRELESS: UPDATE"
-            # update secrets then update connection
-            update_wireless_passwd_connection_change_secrets(CONNECTION_PATH, connection, elements[1])
-            # Change the connection with Update()
-            proxy = bus.get_object("org.freedesktop.NetworkManager", CONNECTION_PATH)
-            settings = dbus.Interface(proxy, "org.freedesktop.NetworkManager.Settings.Connection")
-            settings.Update(connection)
-        else:
-            print "WIRELESS: NEW"
-            # create a new connection
-            update_wireless_passwd_connection_new(elements[0], elements[1])
-        return Error.SUCCESS
+        for line in lines:
+            elements = line.split(":")
+            if len(elements)!=2:
+                return Error.FAIL
+            connection = update_wireless_passwd_connection_find_by_name(elements[0])
+            if connection:
+                print "WIRELESS: UPDATE"
+                # update secrets then update connection
+                update_wireless_passwd_connection_change_secrets(CONNECTION_PATH, connection, elements[1])
+                # Change the connection with Update()
+                proxy = bus.get_object("org.freedesktop.NetworkManager", CONNECTION_PATH)
+                settings = dbus.Interface(proxy, "org.freedesktop.NetworkManager.Settings.Connection")
+                settings.Update(connection)
+            else:
+                print "WIRELESS: NEW"
+                # create a new connection
+                update_wireless_passwd_connection_new(elements[0], elements[1])
+            return Error.SUCCESS
     return Error.NONE
 # ################################################################################################################################################## #
 
@@ -459,13 +534,19 @@ def device_event(device):
                 state = update_wireless_passwd(MOUNT_DIR, WIRELESS_PASSWD)
                 led_alert_do(state, LED.WIFI, 'Wifi information')
 
-                # Search and update for EMV configure
-                state = update_emv_configure(MOUNT_DIR, EMV_CONFIG_DIR, EMV_LOCATION, EMV_LOAD_CONFIG_SH)
-                led_alert_do(state, LED.EMV, 'EMV Configure')
-
                 # Search and run test tool
                 state = execute_testtool_configure(MOUNT_DIR, TT_PATTERN, TT_LOCATION, TT_OPTION)
                 led_alert_do(state, LED.EMV, 'TestTool Execute')
+
+                # Search and prepare to update for EMV configure
+                state = prepare_update_emv_configure(MOUNT_DIR, EMV_CONFIG_DIR, EMV_LOCATION, EMV_LOAD_CONFIG_SH, MD5_FILE)
+                led_alert_do(state, LED.EMV, 'EMV Configure')
+
+                # Check need update EMV configure and do it if needed
+                state = check_update_emv_configure(EMV_LOCATION, EMV_FLAG)
+                if state:
+                    update_emv_configure(EMV_LOCATION, EMV_LOAD_CONFIG_SH, MD5_FILE)
+                    ---- reboot here ----
 
                 # Done, now umount for this partition
                 sleep(1)
