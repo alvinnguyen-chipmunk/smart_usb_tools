@@ -19,9 +19,23 @@ import os
 import subprocess
 import dbus, uuid
 import hashlib, re
-from time import time, sleep
-from pyudev import Context, Monitor
 import smbus
+import time
+from time import sleep
+from pyudev import Context, Monitor
+
+TIMEOUT_VALUE = 30
+
+class TimeOut:
+    def __init__(self, deadtime):
+        self.timeout = time.time() + deadtime
+
+    def OnTime(self):
+        if time.time() > self.timeout:
+            return False
+        else:
+            return True
+
 
 # Mount global variable
 MOUNT_DIR                   = ".extra_service_tmp_dir"
@@ -70,14 +84,16 @@ class LED_COLOR:
     OFF_COLOR     = 0x00
     SUCCESS_COLOR = 0x01
     FAILURE_COLOR = 0x02
+    STARTED_COLOR = 0x04
     MOUNT_COLOR   = 0x05
     NONE_COLOR    = 0x06
     RUNNING_COLOR = 0x07
 
 class LED:
-    AGPS = 1
-    WIFI = 2
-    EMV  = 3
+    AGPS     = 1
+    WIFI     = 2
+    EMV      = 3
+    TESTTOOL = 4
 
 # DBUS global variable
 bus     = dbus.SystemBus()
@@ -190,9 +206,10 @@ def led_alert_do(state, index, string):
 
 # ################################################################################################################################################## #
 def update_emv_configure_systemd_service_togle(is_start):
+    global USE_SVC_SYSTEMD
     systemd1 = bus.get_object('org.freedesktop.systemd1',  '/org/freedesktop/systemd1')
     manager = dbus.Interface(systemd1, 'org.freedesktop.systemd1.Manager')
-
+    print 'EMV: Enter update_emv_configure_systemd_service_togle'
     try:
         if is_start:
             command = 'ps auwx | grep -in "{0}" | grep -v grep'.format(SVC_APP)
@@ -200,11 +217,12 @@ def update_emv_configure_systemd_service_togle(is_start):
             if not result:
                 USE_SVC_SYSTEMD = True
                 manager.RestartUnit('styl-readersvcd.service', 'fail')
+                print 'EMV: Start styl-readersvcd.service'
         else:
             if USE_SVC_SYSTEMD:
                 manager.StopUnit('styl-readersvcd.service', 'fail')
                 USE_SVC_SYSTEMD = False
-
+                print 'EMV: Stop styl-readersvcd.service'
     except:
         return False
 
@@ -222,6 +240,7 @@ def prepare_update_emv_configure(directory, emv_config_dir, emv_location, emv_lo
 
     if not os.path.exists(emv_location) or not os.path.exists(emv_loader):
         return Error.FAIL
+
     # Remove all *.json files in old EMV configure directory
     command = 'rm -rf {0}/*.json'.format(emv_location)
     result = get_from_shell(command)
@@ -230,10 +249,10 @@ def prepare_update_emv_configure(directory, emv_config_dir, emv_location, emv_lo
 
     # Gen md5 checksum information
     os.chdir(new_config_dir)
-    command = 'md5sum * > {0}'.format(MD5_FILE)
+    command = 'md5sum *.json > {0}'.format(MD5_FILE)
     exec_command(command)
     command = '{0}/(1)'.format(new_config_dir, MD5_FILE)
-    if not os.path.exist(new_config_dir):
+    if not os.path.exists(new_config_dir):
         return Error.FAIL
 
     # Copy all *.json files in new_config_dir to old EMV configure directory
@@ -248,7 +267,10 @@ def prepare_update_emv_configure(directory, emv_config_dir, emv_location, emv_lo
     if result:
         return Error.FAIL
 
-    ---- sync here ----
+    #result = checkcall_command("sync")
+    #print 'SYNC result: {0}'.format(result)
+    os.system("sync")
+    os.chdir(emv_location)
 
     return Error.SUCCESS
 
@@ -272,9 +294,15 @@ def check_update_emv_configure(emv_location, emv_flag):
 
 
 def update_emv_configure(emv_location, emv_load_config_sh, md5_file):
-    if not directory or not emv_config_dir or not emv_location or not md5_file:
+    if not emv_location or not emv_load_config_sh or not md5_file:
         return Error.FAIL
 
+    emv_loader = '{0}/{1}'.format(emv_location, emv_load_config_sh)
+
+    if not os.path.exists(emv_location) or not os.path.exists(emv_loader):
+        return Error.FAIL
+
+    is_error = False
     # Start readersvcd service
     if not update_emv_configure_systemd_service_togle(True):
         return Error.FAIL
@@ -283,7 +311,7 @@ def update_emv_configure(emv_location, emv_load_config_sh, md5_file):
     os.chdir(emv_location)
     lines = [line.rstrip('\n') for line in open(md5_file)]
     for line in lines:
-        elements = re.findall(r"[\w']+", line)
+        elements = re.findall(r"[\w'.]+", line)
         print 'len(elements): {0}'.format(len(elements))
         print 'elements[0]: {0}'.format(elements[0])
         print 'elements[1]: {0}'.format(elements[1])
@@ -299,19 +327,21 @@ def update_emv_configure(emv_location, emv_load_config_sh, md5_file):
                 print "MD5 verified."
         else:
                 print "MD5 verification failed!."
-                return Error.FAIL
+                is_error = True
 
-    # Run emv_loader to load all *.json files to reader
-    command = '{0}'.format(emv_loader)
-    result = bash_command(command)
-
-    if result == '0':
-        return Error.FAIL
-    esle:
-        return Error.SUCCESS
+    if not is_error:
+        command = '{0}'.format(emv_loader)
+        result = bash_command(command)
+        if result == '0':
+            is_error = True
 
     # Stop readersvcd service
     update_emv_configure_systemd_service_togle(False)
+
+    if not is_error:
+        return Error.SUCCESS
+    else:
+        return Error.FAIL
 
 # ################################################################################################################################################## #
 
@@ -408,6 +438,7 @@ def update_wireless_passwd(directory, wireless_passwd):
     if path:
         lines = [line.rstrip('\n') for line in open(path)]
         for line in lines:
+            print 'Wireless update for: {0}'.format(line)
             elements = line.split(":")
             if len(elements)!=2:
                 return Error.FAIL
@@ -424,7 +455,7 @@ def update_wireless_passwd(directory, wireless_passwd):
                 print "WIRELESS: NEW"
                 # create a new connection
                 update_wireless_passwd_connection_new(elements[0], elements[1])
-            return Error.SUCCESS
+        return Error.SUCCESS
     return Error.NONE
 # ################################################################################################################################################## #
 
@@ -466,12 +497,22 @@ def update_geolocation_key(directory, stylagps_config, stylagps_location):
 
 # ################################################################################################################################################## #
 def umount_action(partition, directory):
-    command = 'umount {0}'.format(partition)
-    result = get_from_shell(command)
-    print 'umount_action: umount: result: {0}'.format(result)
-    command = 'rm -rf {0}'.format(directory)
-    result = get_from_shell(command)
-    print 'umount_action: rm: result: {0}'.format(result)
+    timeout = TimeOut(TIMEOUT_VALUE)
+    while True:
+        command = 'umount {0}'.format(partition)
+	print 'UMOUNT commnad: {0}'.format(command);
+        result = get_from_shell(command)
+        print 'umount_action: umount: result: {0}'.format(result)
+        if not result:
+            break
+        if not timeout.OnTime():
+            led_alert_set_all(LED_COLOR.FAILURE_COLOR)
+            break
+        sleep(1)
+
+    #command = 'rm -rf {0}'.format(directory)
+    #result = get_from_shell(command)
+    #print 'umount_action: rm: result: {0}'.format(result)
 
 def mount_action(partition, directory):
     if CHECK_FSTYPE:
@@ -488,15 +529,15 @@ def mount_action(partition, directory):
         else:
             print 'Found a partition with {0} type'.format(CHECK_FSTYPE_2)
 
-    command = 'mkdir -p {0}'.format(directory)
+    #command = 'mkdir -p {0}'.format(directory)
+    #result = get_from_shell(command)
+    #print 'mount_action: mkdir result: {0}'.format(result)
+    #if not result:
+    command = 'mount {0} {1}'.format(partition, directory)
     result = get_from_shell(command)
-    print 'mount_action: mkdir result: {0}'.format(result)
-    if not result:
-        command = 'mount {0} {1}'.format(partition, directory)
-        result = get_from_shell(command)
-        print 'mount_action: mount: result: {0}'.format(result)
-        if not result and os.path.ismount(directory):
-            return Error.SUCCESS
+    print 'mount_action: mount: result: {0}'.format(result)
+    if not result and os.path.ismount(directory):
+        return Error.SUCCESS
     return Error.FAIL
 # ################################################################################################################################################## #
 
@@ -536,17 +577,19 @@ def device_event(device):
 
                 # Search and run test tool
                 state = execute_testtool_configure(MOUNT_DIR, TT_PATTERN, TT_LOCATION, TT_OPTION)
-                led_alert_do(state, LED.EMV, 'TestTool Execute')
+                led_alert_do(state, LED.TESTTOOL, 'TestTool Flags')
 
                 # Search and prepare to update for EMV configure
                 state = prepare_update_emv_configure(MOUNT_DIR, EMV_CONFIG_DIR, EMV_LOCATION, EMV_LOAD_CONFIG_SH, MD5_FILE)
                 led_alert_do(state, LED.EMV, 'EMV Configure')
-
-                # Check need update EMV configure and do it if needed
-                state = check_update_emv_configure(EMV_LOCATION, EMV_FLAG)
-                if state:
-                    update_emv_configure(EMV_LOCATION, EMV_LOAD_CONFIG_SH, MD5_FILE)
-                    ---- reboot here ----
+                if state==Error.SUCCESS:
+                    command = 'echo  1 > {0}/{1}'.format(EMV_LOCATION, EMV_FLAG)
+                    result = exec_command(command)
+                    print 'ECHO result: {0}'.format(result)
+                    #result = checkcall_command("sync")
+                    #print 'SYNC result: {0}'.format(result)
+                    os.system("sync")
+                    os.system("reboot")
 
                 # Done, now umount for this partition
                 sleep(1)
@@ -567,6 +610,26 @@ def device_event(device):
 # ################################################################################################################################################## #
 if __name__ == '__main__':
     print 'Start extra service script .......'
+
+    # Initialization I2C LED
+    led_alert_init()
+    led_alert_set_all(LED_COLOR.STARTED_COLOR)
+
+    # Check need update EMV configure and do it if needed
+    state = check_update_emv_configure(EMV_LOCATION, EMV_FLAG)
+    if state:
+	# Initialization I2C LED
+        led_alert_init()
+        led_alert_set_all(LED_COLOR.RUNNING_COLOR)
+        print 'CHECK UPDATE EMV CONFIGURE IS: OK'
+        state = update_emv_configure(EMV_LOCATION, EMV_LOAD_CONFIG_SH, MD5_FILE)
+        led_alert_set_all(LED_COLOR.NONE_COLOR)
+        led_alert_do(state, LED.EMV, 'EMV Configure')
+        command = 'echo  0 > {0}/{1}'.format(EMV_LOCATION, EMV_FLAG)
+        result = exec_command(command)
+        print 'ECHO result: {0}'.format(result)
+    else:
+        print 'CHECK UPDATE EMV CONFIGURE IS: NO'
 
     home_dir = os.path.expanduser("~")
     MOUNT_DIR = '{0}/{1}'.format(home_dir, MOUNT_DIR)
