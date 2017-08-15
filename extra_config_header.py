@@ -219,8 +219,7 @@ def led_alert_set(light_index, light_color):
             light_value = (light_value & 0x00F8) | light_color
             msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value)
         elif light_index == LED.EMV_UPDATE:
-            msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)
-            msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value)
+            led_alert_set_all(light_color)
 
     except:
         _error_('Set light color for I2C LED : FAILURED')
