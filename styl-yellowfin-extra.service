@@ -1,5 +1,5 @@
 [Unit]
-Description=STYL Yellowfin Extra service - update EMV's configure, STYLAGPS's configure, Wireless Connection
+Description=STYL Yellowfin Extra Configure Service
 Requires=dbus.service
 After=styl-system-startup.service
 
