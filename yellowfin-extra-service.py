@@ -45,17 +45,6 @@ from pyudev import Context, Monitor
 
 TIMEOUT_VALUE = 30
 
-class TimeOut:
-    def __init__(self, deadtime):
-        self.timeout = time.time() + deadtime
-
-    def OnTime(self):
-        if time.time() > self.timeout:
-            return False
-        else:
-            return True
-
-
 # Mount global variable
 MOUNT_DIR                   = ".extra_service_tmp_dir"
 CHECK_FSTYPE_1              = "OEM-ID \"mkfs.fat\""
@@ -99,14 +88,24 @@ class Error:
     FAIL        = 2
     NONE        = 3
 
+#   0: OFF
+#   1: BLUE
+#   2: RED
+#   3: PINK
+#   4: GREEN
+#   5: CYAN
+#   6: YELLOW
+#   7: WHITE
+
 class LED_COLOR:
     OFF_COLOR     = 0x00
-    SUCCESS_COLOR = 0x01
-    FAILURE_COLOR = 0x02
-    STARTED_COLOR = 0x04
-    MOUNT_COLOR   = 0x05
-    NONE_COLOR    = 0x06
-    RUNNING_COLOR = 0x07
+    SUCCESS_COLOR = 0x01        # Blue
+    FAILURE_COLOR = 0x02        # Red
+    MOUNT_COLOR   = 0x03        # Pink
+    OTHER_2_COLOR = 0x04        # Green
+    OTHER_1_COLOR = 0x05        # Cyan
+    NONE_COLOR    = 0x06        # Yellow
+    RUNNING_COLOR = 0x07        # Write
 
 class LED:
     AGPS     = 1
@@ -131,6 +130,12 @@ class TimeOut:
             return False
         else:
             return True
+
+def _log_(string):
+    print '[STYL Extra Config Service]: INFO: {0}'.format(string)
+
+def _error_(string):
+    print '[STYL Extra Config Service]: ERROR: {0}'.format(string)
 
 def find_file_in_path(name, path):
     for root, dirs, files in os.walk(path):
@@ -167,14 +172,14 @@ def bash_command(command):
         result = subprocess.check_call(['bash', command])
         return result
     except:
-        return -1
+        return -101
 
 def checkcall_command(command):
     try:
         result = subprocess.check_call([command])
         return result
     except:
-        return -1
+        return -101
 
 # ################################################################################################################################################## #
 
@@ -185,7 +190,28 @@ def led_alert_init():
         ret = msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_CONFIG_REG_PORT1, PD9535_CONFIG_OUT_PORT)
 
     except:
-        print 'Initialization I2C LED : FAILURED'
+        _error_('Initialization I2C LED : FAILURED')
+
+def led_alert_flicker(off_color):
+    light_value_port0 = -1
+    light_value_port1 = -1
+    try:
+        light_value_port0 = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
+        light_value_port1 = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1);
+
+        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, off_color)
+        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, off_color)
+        sleep(0.25)
+        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value_port0)
+        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value_port1)
+        sleep(0.25)
+        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, off_color)
+        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, off_color)
+        sleep(0.25)
+        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value_port0)
+        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value_port1)
+    except:
+        _error_('Flicker I2C LED : FAILURED')
 
 def led_alert_set(light_index, light_color):
     light_value = -1
@@ -204,9 +230,10 @@ def led_alert_set(light_index, light_color):
             msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value)
 
     except:
-        print 'Set light color for I2C LED : FAILURED'
+        _error_('Set light color for I2C LED : FAILURED')
 
 def led_alert_set_all(light_color):
+
     led_alert_set(LED.AGPS, light_color)
     led_alert_set(LED.WIFI, light_color)
     led_alert_set(LED.EMV , light_color)
@@ -214,13 +241,13 @@ def led_alert_set_all(light_color):
 def led_alert_do(state, index, string):
     if state == Error.FAIL:
         led_alert_set(index, LED_COLOR.FAILURE_COLOR)
-        print 'Update {0} fail'.format(string)
+        _log_('Update {0} fail'.format(string))
     elif state == Error.SUCCESS:
         led_alert_set(index, LED_COLOR.SUCCESS_COLOR)
-        print 'Update {0} success'.format(string)
+        _log_('Update {0} success'.format(string))
     elif state == Error.NONE:
         led_alert_set(index, LED_COLOR.NONE_COLOR)
-        print 'Not found {0}'.format(string)
+        _log_('Not found {0}'.format(string))
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
@@ -263,8 +290,6 @@ def prepare_update_emv_configure(directory, emv_config_dir, emv_location, emv_lo
     if result:
         return Error.FAIL
 
-    #result = checkcall_command("sync")
-    #print 'SYNC result: {0}'.format(result)
     os.system("sync")
     os.chdir(emv_location)
 
@@ -273,8 +298,6 @@ def prepare_update_emv_configure(directory, emv_config_dir, emv_location, emv_lo
 
 # ################################################################################################################################################## #
 def update_wireless_passwd_connection_new(ssid_string, psk_string):
-    print 'update_wireless_passwd_connection_new - ssid: {0}'.format(ssid_string)
-    print 'update_wireless_passwd_connection_new - psk: {0}'.format(psk_string)
 
     s_con = dbus.Dictionary({
     'type': '802-11-wireless',
@@ -303,7 +326,7 @@ def update_wireless_passwd_connection_new(ssid_string, psk_string):
         'ipv6': s_ip6
          })
 
-    print connection
+    #print connection
 
     proxy = bus.get_object("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/Settings")
     settings = dbus.Interface(proxy, "org.freedesktop.NetworkManager.Settings")
@@ -364,13 +387,13 @@ def update_wireless_passwd(directory, wireless_passwd):
     if path:
         lines = [line.rstrip('\n') for line in open(path)]
         for line in lines:
-            print 'Wireless update for: {0}'.format(line)
+            #print 'Wireless update for: {0}'.format(line)
             elements = line.split(":")
             if len(elements)!=2:
                 return Error.FAIL
             connection = update_wireless_passwd_connection_find_by_name(elements[0])
             if connection:
-                print "WIRELESS: UPDATE"
+                #print "WIRELESS: UPDATE"
                 # update secrets then update connection
                 update_wireless_passwd_connection_change_secrets(CONNECTION_PATH, connection, elements[1])
                 # Change the connection with Update()
@@ -378,7 +401,7 @@ def update_wireless_passwd(directory, wireless_passwd):
                 settings = dbus.Interface(proxy, "org.freedesktop.NetworkManager.Settings.Connection")
                 settings.Update(connection)
             else:
-                print "WIRELESS: NEW"
+                #print "WIRELESS: NEW"
                 # create a new connection
                 update_wireless_passwd_connection_new(elements[0], elements[1])
         return Error.SUCCESS
@@ -394,7 +417,6 @@ def execute_testtool_configure(directory, tt_pattern, tt_location, tt_option):
     path = find_file_in_path(tt_pattern, directory)
     if path:
         command = '{0} {1}'.format(tt_location, tt_option)
-        print 'command: {0}'.format(command)
         result = exec_command(command)
         return Error.SUCCESS
     else:
@@ -424,27 +446,16 @@ def update_geolocation_key(directory, stylagps_config, stylagps_location):
 # ################################################################################################################################################## #
 def umount_action(partition, directory):
     timeout = TimeOut(TIMEOUT_VALUE)
-    while True:
-        command = 'umount {0}'.format(partition)
-	print 'UMOUNT commnad: {0}'.format(command);
-        result = get_from_shell(command)
-        print 'umount_action: umount: result: {0}'.format(result)
-        if not result:
-            break
-        if not timeout.OnTime():
-            led_alert_set_all(LED_COLOR.FAILURE_COLOR)
-            break
-        sleep(1)
-
-    #command = 'rm -rf {0}'.format(directory)
-    #result = get_from_shell(command)
-    #print 'umount_action: rm: result: {0}'.format(result)
+    command = 'umount {0}'.format(partition)
+    result = get_from_shell(command)
+    if not result:
+        return Error.SUCCESS
+    return Error.FAIL
 
 def mount_action(partition, directory):
     if CHECK_FSTYPE:
         command = 'file -s {0}'.format(partition)
         result = get_from_shell(command)
-        print 'mount_action: result: {0}'.format(result)
         if not result:
             return Error.FAIL
 
@@ -453,17 +464,16 @@ def mount_action(partition, directory):
         if result[0].find(CHECK_FSTYPE_2)==-1:
             return Error.NONE
         else:
-            print 'Found a partition with {0} type'.format(CHECK_FSTYPE_2)
+            _log_('Found a partition with {0} type'.format(CHECK_FSTYPE_2))
 
-    #command = 'mkdir -p {0}'.format(directory)
-    #result = get_from_shell(command)
-    #print 'mount_action: mkdir result: {0}'.format(result)
-    #if not result:
-    command = 'mount {0} {1}'.format(partition, directory)
+    command = 'mkdir -p {0}'.format(directory)
     result = get_from_shell(command)
-    print 'mount_action: mount: result: {0}'.format(result)
-    if not result and os.path.ismount(directory):
-        return Error.SUCCESS
+    if not result:
+        command = 'mount {0} {1}'.format(partition, directory)
+        result = get_from_shell(command)
+        if not result and os.path.ismount(directory):
+            return Error.SUCCESS
+
     return Error.FAIL
 # ################################################################################################################################################## #
 
@@ -486,9 +496,8 @@ def device_event(device):
         if partition:
             # Initialization I2C LED
             led_alert_init()
+            led_alert_set_all(LED_COLOR.OFF_COLOR)
             # Mount partitions on USB device
-            print 'partition: {0}'.format(partition)
-            print 'MOUNT_DIR: {0}'.format(MOUNT_DIR)
             state = mount_action(partition, MOUNT_DIR)
             if state==Error.SUCCESS:
                 # Set running state for I2C LED
@@ -502,10 +511,6 @@ def device_event(device):
                 state = update_wireless_passwd(MOUNT_DIR, WIRELESS_PASSWD)
                 led_alert_do(state, LED.WIFI, 'Wifi information')
 
-                # Search and run test tool
-                state = execute_testtool_configure(MOUNT_DIR, TT_PATTERN, TT_LOCATION, TT_OPTION)
-                led_alert_do(state, LED.TESTTOOL, 'TestTool Flags')
-
                 # Search and prepare to update for EMV configure
                 state = prepare_update_emv_configure(MOUNT_DIR, EMV_CONFIG_DIR, EMV_LOCATION, EMV_LOAD_CONFIG_SH, MD5_FILE)
                 led_alert_do(state, LED.EMV, 'EMV Configure')
@@ -514,14 +519,19 @@ def device_event(device):
                     result = exec_command(command)
                     os.system("sync")
 
+                # Search and run test tool
+                state = execute_testtool_configure(MOUNT_DIR, TT_PATTERN, TT_LOCATION, TT_OPTION)
+                led_alert_do(state, LED.TESTTOOL, 'TestTool Flags')
+
                 # Done, now umount for this partition
-                sleep(1)
-                umount_action(partition, MOUNT_DIR)
+                state = umount_action(partition, MOUNT_DIR)
+                if state==Error.SUCCESS:
+                    led_alert_flicker(LED_COLOR.OFF_COLOR)
 
             elif state==Error.FAIL:
                 led_alert_set_all(LED_COLOR.MOUNT_COLOR)
             elif state==Error.NONE:
-                print 'Not found FAT partition in device.'
+                _info_('Not found FAT partition in device.')
 
     elif device.action == 'remove':
         check = device.device_type
@@ -532,7 +542,7 @@ def device_event(device):
 
 # ################################################################################################################################################## #
 if __name__ == '__main__':
-    print 'Start extra service script .......'
+    _log_('Start')
 
     home_dir = os.path.expanduser("~")
     MOUNT_DIR = '{0}/{1}'.format(home_dir, MOUNT_DIR)
@@ -543,5 +553,5 @@ if __name__ == '__main__':
     for device in iter(monitor.poll, None):
         device_event(device)
 
-    print 'Exit extra service script .......'
+    _log_('Exit')
 # ################################################################################################################################################## #
