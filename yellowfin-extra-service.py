@@ -1,16 +1,35 @@
 #!/usr/bin/env python
 
 ##################################################################################################################################
-##      yellowfin-extra-service.py : Python script will to do:                                                                  ##
-##              - Detect USB plugin then mount it                                                                               ##
-##              - Search for Wifi pass, AGPS key, EMV configure file                                                            ##
-##              - Update information found                                                                                      ##
+##  (C) Copyright 2009 STYL Solutions Co., Ltd. , All rights reserved                                                           ##
+##                                                                                                                              ##
+##  This source code and any compilation or derivative thereof is the sole                                                      ##
+##  property of STYL Solutions Co., Ltd. and is provided pursuant to a                                                          ##
+##  Software License Agreement.  This code is the proprietary information                                                       ##
+##  of STYL Solutions Co., Ltd and is confidential in nature.  Its use and                                                      ##
+##  dissemination by any party other than STYL Solutions Co., Ltd is                                                            ##
+##  strictly limited by the confidential information provisions of the                                                          ##
+##  agreement referenced above.                                                                                                 ##
+##                                                                                                                              ##
+##  yellowfin-extra-service.py : Python script will to do:                                                                      ##
+##              - Detect USB plugin then mount FAT partitions on USB device                                                     ##
+##              - Search for Wireless information, AGPS key information, EMV configure files, Test-tool flags                   ##
+##              - If Wireless information found                                                                                 ##
+##                  + Update the exist wireless connection                                                                      ##
+##                    or                                                                                                        ##
+##                  + Create a wireless connection                                                                              ##
+##              - If AGPS information found                                                                                     ##
+##                    Update file /etc/stylagps/stylagps.conf                                                                   ##
+##              - If EMV configure files found                                                                                  ##
+##                    Copy to MMC, the files will be process by other script when system reboot.                                ##
+##              - If Test-tool flags found                                                                                      ##
+##                    Execute Test-tool application (ask Mr. Thinh for more information)                                        ##
+##                                                                                                                              ##
 ##              - LED alert for working result                                                                                  ##
 ##                                                                                                                              ##
 ##       Create:    2017-07-06 14:30:00                                                                                         ##
-##       Modified:  -                                                                                                           ##
+##       Modified:  2017-08-15 10:00:00                                                                                         ##
 ##       Author:    Alvin Nguyen (alvin.nguyen@styl.solutions)                                                                  ##
-##       Copyright: STYL Solutions Pte. Lte.                                                                                    ##
 ##                                                                                                                              ##
 ##################################################################################################################################
 
@@ -96,11 +115,11 @@ class LED:
     TESTTOOL = 4
 
 # DBUS global variable
-bus     = dbus.SystemBus()
+bus = dbus.SystemBus()
 
 # MSBUS global variable
 # 0 = /dev/i2c-0 (port I2C0), 1 = /dev/i2c-1 (port I2C1)
-msbus   = smbus.SMBus(0)
+msbus = smbus.SMBus(0)
 
 # ################################################################################################################################################## #
 class TimeOut:
@@ -205,29 +224,6 @@ def led_alert_do(state, index, string):
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
-def update_emv_configure_systemd_service_togle(is_start):
-    global USE_SVC_SYSTEMD
-    systemd1 = bus.get_object('org.freedesktop.systemd1',  '/org/freedesktop/systemd1')
-    manager = dbus.Interface(systemd1, 'org.freedesktop.systemd1.Manager')
-    print 'EMV: Enter update_emv_configure_systemd_service_togle'
-    try:
-        if is_start:
-            command = 'ps auwx | grep -in "{0}" | grep -v grep'.format(SVC_APP)
-            result = get_from_shell(command)
-            if not result:
-                USE_SVC_SYSTEMD = True
-                manager.RestartUnit('styl-readersvcd.service', 'fail')
-                print 'EMV: Start styl-readersvcd.service'
-        else:
-            if USE_SVC_SYSTEMD:
-                manager.StopUnit('styl-readersvcd.service', 'fail')
-                USE_SVC_SYSTEMD = False
-                print 'EMV: Stop styl-readersvcd.service'
-    except:
-        return False
-
-    return True
-
 def prepare_update_emv_configure(directory, emv_config_dir, emv_location, emv_load_config_sh, md5_file):
     if not directory or not emv_config_dir or not emv_location:
         return Error.FAIL
@@ -273,76 +269,6 @@ def prepare_update_emv_configure(directory, emv_config_dir, emv_location, emv_lo
     os.chdir(emv_location)
 
     return Error.SUCCESS
-
-def check_update_emv_configure(emv_location, emv_flag):
-    if not emv_location or not emv_flag:
-        return False
-
-    emv_checker = '{0}/{1}'.format(emv_location, emv_flag)
-
-    if not os.path.exists(emv_location) or not os.path.exists(emv_checker):
-        return False
-
-    lines = [line.rstrip('\n') for line in open(emv_checker)]
-    if len(lines)!=1:
-        return False
-
-    if lines[0] == '1':
-        return True
-
-    return False
-
-
-def update_emv_configure(emv_location, emv_load_config_sh, md5_file):
-    if not emv_location or not emv_load_config_sh or not md5_file:
-        return Error.FAIL
-
-    emv_loader = '{0}/{1}'.format(emv_location, emv_load_config_sh)
-
-    if not os.path.exists(emv_location) or not os.path.exists(emv_loader):
-        return Error.FAIL
-
-    is_error = False
-    # Start readersvcd service
-    if not update_emv_configure_systemd_service_togle(True):
-        return Error.FAIL
-
-    #verify checksum
-    os.chdir(emv_location)
-    lines = [line.rstrip('\n') for line in open(md5_file)]
-    for line in lines:
-        elements = re.findall(r"[\w'.]+", line)
-        print 'len(elements): {0}'.format(len(elements))
-        print 'elements[0]: {0}'.format(elements[0])
-        print 'elements[1]: {0}'.format(elements[1])
-        # Correct original md5 goes here
-        original_md5 = elements[0]
-        file_name = elements[1]
-        with open(file_name) as file_to_check:
-                # read contents of the file
-                data = file_to_check.read()
-                # pipe contents of the file through
-                md5_returned = hashlib.md5(data).hexdigest()
-        if original_md5 == md5_returned:
-                print "MD5 verified."
-        else:
-                print "MD5 verification failed!."
-                is_error = True
-
-    if not is_error:
-        command = '{0}'.format(emv_loader)
-        result = bash_command(command)
-        if result == '0':
-            is_error = True
-
-    # Stop readersvcd service
-    update_emv_configure_systemd_service_togle(False)
-
-    if not is_error:
-        return Error.SUCCESS
-    else:
-        return Error.FAIL
-
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
@@ -567,6 +493,7 @@ def device_event(device):
             if state==Error.SUCCESS:
                 # Set running state for I2C LED
                 led_alert_set_all(LED_COLOR.RUNNING_COLOR)
+
                 # Search and update for Google geolocation API key
                 state = update_geolocation_key(MOUNT_DIR, STYLAGPS_CONFIG, STYLAGPS_LOCATION)
                 led_alert_do(state, LED.AGPS, 'Google geolocation API key')
@@ -585,11 +512,7 @@ def device_event(device):
                 if state==Error.SUCCESS:
                     command = 'echo  1 > {0}/{1}'.format(EMV_LOCATION, EMV_FLAG)
                     result = exec_command(command)
-                    print 'ECHO result: {0}'.format(result)
-                    #result = checkcall_command("sync")
-                    #print 'SYNC result: {0}'.format(result)
                     os.system("sync")
-                    os.system("reboot")
 
                 # Done, now umount for this partition
                 sleep(1)
@@ -610,26 +533,6 @@ def device_event(device):
 # ################################################################################################################################################## #
 if __name__ == '__main__':
     print 'Start extra service script .......'
-
-    # Initialization I2C LED
-    led_alert_init()
-    led_alert_set_all(LED_COLOR.STARTED_COLOR)
-
-    # Check need update EMV configure and do it if needed
-    state = check_update_emv_configure(EMV_LOCATION, EMV_FLAG)
-    if state:
-	# Initialization I2C LED
-        led_alert_init()
-        led_alert_set_all(LED_COLOR.RUNNING_COLOR)
-        print 'CHECK UPDATE EMV CONFIGURE IS: OK'
-        state = update_emv_configure(EMV_LOCATION, EMV_LOAD_CONFIG_SH, MD5_FILE)
-        led_alert_set_all(LED_COLOR.NONE_COLOR)
-        led_alert_do(state, LED.EMV, 'EMV Configure')
-        command = 'echo  0 > {0}/{1}'.format(EMV_LOCATION, EMV_FLAG)
-        result = exec_command(command)
-        print 'ECHO result: {0}'.format(result)
-    else:
-        print 'CHECK UPDATE EMV CONFIGURE IS: NO'
 
     home_dir = os.path.expanduser("~")
     MOUNT_DIR = '{0}/{1}'.format(home_dir, MOUNT_DIR)
