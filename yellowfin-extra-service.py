@@ -108,17 +108,18 @@ class LED_COLOR:
     RUNNING_COLOR = 0x07        # Write
 
 class LED:
-    AGPS     = 1
-    WIFI     = 2
-    EMV      = 3
-    TESTTOOL = 4
+    AGPS            = 1
+    WIFI            = 2
+    EMV             = 3
+    EMV_UPDATE      = 4
+    TESTTOOL        = 5
 
 # DBUS global variable
 bus = dbus.SystemBus()
 
 # MSBUS global variable
 # 0 = /dev/i2c-0 (port I2C0), 1 = /dev/i2c-1 (port I2C1)
-msbus = smbus.SMBus(0)
+msbus   = smbus.SMBus(0)
 
 # ################################################################################################################################################## #
 class TimeOut:
@@ -136,7 +137,7 @@ def _log_(string):
 
 def _error_(string):
     print '[STYL Extra Config Service]: ERROR: {0}'.format(string)
-
+    
 def find_file_in_path(name, path):
     for root, dirs, files in os.walk(path):
         if name in files:
@@ -228,12 +229,14 @@ def led_alert_set(light_index, light_color):
             light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1);
             light_value = (light_value & 0x00F8) | light_color
             msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value)
+        elif light_index == LED.EMV_UPDATE:
+            msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)
+            msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value)
 
     except:
         _error_('Set light color for I2C LED : FAILURED')
 
 def led_alert_set_all(light_color):
-
     led_alert_set(LED.AGPS, light_color)
     led_alert_set(LED.WIFI, light_color)
     led_alert_set(LED.EMV , light_color)
