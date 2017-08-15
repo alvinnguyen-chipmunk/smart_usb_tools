@@ -5,7 +5,7 @@ After=styl-system-startup.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python /home/root/extra-service/yellowfin-extra-service.py
+ExecStart=/usr/bin/python /home/root/extra-service/extra_config_runtime.py
 
 [Install]
 WantedBy=multi-user.target

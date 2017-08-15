@@ -121,10 +121,10 @@ class TimeOut:
         else:
             return True
 
-def _log_(string):
+def styl_log(string):
     print '[STYL Extra Config Service]: INFO: {0}'.format(string)
 
-def _error_(string):
+def styl_error(string):
     print '[STYL Extra Config Service]: ERROR: {0}'.format(string)
     
 def find_file_in_path(name, path):
@@ -180,7 +180,7 @@ def led_alert_init():
         ret = msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_CONFIG_REG_PORT1, PD9535_CONFIG_OUT_PORT)
 
     except:
-        _error_('Initialization I2C LED : FAILURED')
+        styl_error('Initialization I2C LED : FAILURED')
 
 def led_alert_flicker(off_color):
     light_value_port0 = -1
@@ -201,7 +201,7 @@ def led_alert_flicker(off_color):
         msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value_port0)
         msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value_port1)
     except:
-        _error_('Flicker I2C LED : FAILURED')
+        styl_error('Flicker I2C LED : FAILURED')
 
 def led_alert_set(light_index, light_color):
     light_value = -1
@@ -222,7 +222,7 @@ def led_alert_set(light_index, light_color):
             led_alert_set_all(light_color)
 
     except:
-        _error_('Set light color for I2C LED : FAILURED')
+        styl_error('Set light color for I2C LED : FAILURED')
 
 def led_alert_set_all(light_color):
     led_alert_set(LED.AGPS, light_color)
@@ -232,12 +232,12 @@ def led_alert_set_all(light_color):
 def led_alert_do(state, index, string):
     if state == Error.FAIL:
         led_alert_set(index, LED_COLOR.FAILURE_COLOR)
-        _log_('Update {0} fail'.format(string))
+        styl_log('Update {0} fail'.format(string))
     elif state == Error.SUCCESS:
         led_alert_set(index, LED_COLOR.SUCCESS_COLOR)
-        _log_('Update {0} success'.format(string))
+        styl_log('Update {0} success'.format(string))
     elif state == Error.NONE:
         led_alert_set(index, LED_COLOR.NONE_COLOR)
-        _log_('Not found {0}'.format(string))
+        styl_log('Not found {0}'.format(string))
 # ################################################################################################################################################## #
 

@@ -29,7 +29,6 @@ from extra_config_header import *
 def update_emv_configure_systemd_service_togle(is_start):
     systemd1 = bus.get_object('org.freedesktop.systemd1',  '/org/freedesktop/systemd1')
     manager = dbus.Interface(systemd1, 'org.freedesktop.systemd1.Manager')
-    print 'EMV: Enter update_emv_configure_systemd_service_togle'
     try:
         if is_start:
             command = 'ps -auwx | grep -in "{0}" | grep -v grep'.format(SVC_APP)
@@ -38,10 +37,8 @@ def update_emv_configure_systemd_service_togle(is_start):
                 return Error.SUCCESS
             else:   
                 manager.RestartUnit('styl-readersvcd.service', 'fail')
-                print 'EMV: Start styl-readersvcd.service'
         else:
             manager.StopUnit('styl-readersvcd.service', 'fail')
-            print 'EMV: Stop styl-readersvcd.service'
     except:
         return Error.FAIL
 
@@ -86,9 +83,6 @@ def update_emv_configure(emv_location, emv_load_config_sh, md5_file):
     lines = [line.rstrip('\n') for line in open(md5_file)]
     for line in lines:
         elements = re.findall(r"[\w'.]+", line)
-        print 'len(elements): {0}'.format(len(elements))
-        print 'elements[0]: {0}'.format(elements[0])
-        print 'elements[1]: {0}'.format(elements[1])
         # Correct original md5 goes here
         original_md5 = elements[0]
         file_name = elements[1]
@@ -99,9 +93,9 @@ def update_emv_configure(emv_location, emv_load_config_sh, md5_file):
                 # pipe contents of the file through
                 md5_returned = hashlib.md5(data).hexdigest()
             if original_md5 == md5_returned:
-                print "MD5 verified."
+                styl_log("MD5 verified.")
             else:
-                print "MD5 verification failed!."
+                styl_log("MD5 verification failed!.")
                 is_error = True
         except:
             is_error = True
@@ -109,7 +103,6 @@ def update_emv_configure(emv_location, emv_load_config_sh, md5_file):
     if not is_error:
         command = '{0}'.format(emv_loader)
         result = bash_command(command)
-        print "result is: {0}".format(result)
         if result == 0:
             is_error = False
         else:
@@ -126,7 +119,7 @@ def update_emv_configure(emv_location, emv_load_config_sh, md5_file):
 
 # ################################################################################################################################################## #
 if __name__ == '__main__':
-    print 'Start extra service script .......'
+    styl_log('Start extra service script .......')
 
     # Initialization I2C LED
     led_alert_init()
@@ -136,15 +129,17 @@ if __name__ == '__main__':
     state = check_update_emv_configure(EMV_LOCATION, EMV_FLAG)
     if state:    
         led_alert_set_all(LED_COLOR.RUNNING_COLOR)
-        print 'CHECK UPDATE EMV CONFIGURE IS: OK'
+        styl_log('CHECK UPDATE EMV CONFIGURE IS: OK')
         state = update_emv_configure(EMV_LOCATION, EMV_LOAD_CONFIG_SH, MD5_FILE)
         led_alert_do(state, LED.EMV_UPDATE, 'EMV Configure Reload')
         command = 'echo  0 > {0}/{1}'.format(EMV_LOCATION, EMV_FLAG)
         result = exec_command(command)
         os.system('sync')
         led_alert_flicker(LED_COLOR.OFF_COLOR)
-    else:
-        print 'CHECK UPDATE EMV CONFIGURE IS: NO'
 
-    print 'Exit extra service script .......'
+    else:
+        styl_log('CHECK UPDATE EMV CONFIGURE IS: NO')
+
+    led_alert_set_all(LED_COLOR.OFF_COLOR)
+    styl_log('Exit extra service script .......')
 # ################################################################################################################################################## #
