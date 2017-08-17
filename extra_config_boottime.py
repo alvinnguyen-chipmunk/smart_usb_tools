@@ -110,9 +110,6 @@ def update_emv_configure(emv_location, emv_load_config_sh, md5_file):
         else:
             is_error = True
 
-    # Stop readersvcd service
-    update_emv_configure_systemd_service_togle(False)
-
     if not is_error:
         return Error.SUCCESS
     else:
@@ -138,6 +135,9 @@ if __name__ == '__main__':
         result = exec_command(command)
         os.system('sync')
         led_alert_flicker(LED_COLOR.OFF_COLOR)
+
+        # Stop readersvcd service
+        update_emv_configure_systemd_service_togle(False)
 
     else:
         styl_log('CHECK UPDATE EMV CONFIGURE IS: NO')

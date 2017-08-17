@@ -200,6 +200,7 @@ def led_alert_flicker(off_color):
         sleep(0.25)
         msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value_port0)
         msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value_port1)
+        sleep(0.25)
     except:
         styl_error('Flicker I2C LED : FAILURED')
 
