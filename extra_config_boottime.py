@@ -34,7 +34,7 @@ def update_emv_configure_systemd_service_togle(is_start):
             command = 'ps -auwx | grep -in "{0}" | grep -v grep'.format(SVC_APP)
             result = get_from_shell(command)
             if result:
-                return Error.SUCCESS
+                return Error.FAIL
             else:
                 manager.StopUnit('styl-yellowfin-extra-config-runtime.service', 'fail')
                 manager.RestartUnit('styl-readersvcd.service', 'fail')
@@ -43,6 +43,8 @@ def update_emv_configure_systemd_service_togle(is_start):
             manager.RestartUnit('styl-yellowfin-extra-config-runtime.service', 'fail')
     except:
         return Error.FAIL
+    
+    sleep(1)
 
     return Error.SUCCESS
 
