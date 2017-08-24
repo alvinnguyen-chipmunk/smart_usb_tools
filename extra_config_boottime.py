@@ -25,21 +25,34 @@
 
 from extra_config_header import *
 
+start_svc = False
+
 # ################################################################################################################################################## #
 def update_emv_configure_systemd_service_togle(is_start):
+    global start_svc
     systemd1 = bus.get_object('org.freedesktop.systemd1',  '/org/freedesktop/systemd1')
     manager = dbus.Interface(systemd1, 'org.freedesktop.systemd1.Manager')
     try:
         if is_start:
             command = 'ps | grep -in "{0}" | grep -v grep'.format(SVC_APP)
+            styl_debug('PS command: {0}'.format(command))
             result = get_from_shell(command)
+            styl_debug('PS result: {0}'.format(result))
             if result:
+                styl_error('Conflict with {0} was already running'.format(SVC_APP))
                 return Error.FAIL
             else:
+                styl_debug('RESTART SVC')
                 manager.StopUnit('styl-yellowfin-extra-config-runtime.service', 'fail')
+                start_svc = True
                 manager.RestartUnit('styl-readersvcd.service', 'fail')
         else:
-            manager.StopUnit('styl-readersvcd.service', 'fail')
+            
+            if start_svc:
+                manager.StopUnit('styl-readersvcd.service', 'fail')
+                styl_debug('Stop styl-readersvcd.service')
+            else:
+                styl_debug('Do not stop styl-readersvcd.service')
             manager.RestartUnit('styl-yellowfin-extra-config-runtime.service', 'fail')
     except:
         return Error.FAIL
@@ -77,10 +90,11 @@ def update_emv_configure(emv_location, emv_load_config_sh, md5_file):
     if not os.path.exists(emv_location) or not os.path.exists(emv_loader) or not os.path.exists(checksumer):
         return Error.FAIL
 
-    is_error = False
     # Start readersvcd service
     if update_emv_configure_systemd_service_togle(True)!=Error.SUCCESS:
         return Error.FAIL
+
+    is_error = False
 
     #verify checksum
     os.chdir(emv_location)
@@ -137,7 +151,7 @@ if __name__ == '__main__':
         result = exec_command(command)
         os.system('sync')
         led_alert_flicker(LED_COLOR.OFF_COLOR)
-
+        
         # Stop readersvcd service
         update_emv_configure_systemd_service_togle(False)
 
