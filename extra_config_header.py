@@ -121,11 +121,25 @@ class TimeOut:
         else:
             return True
 
+class bcolors:
+    HEADER      = '\033[95m'
+    OKBLUE      = '\033[94m'
+    OKGREEN     = '\033[92m'
+    WARNING     = '\033[93m'
+    FAIL        = '\033[91m'
+    ENDC        = '\033[0m'
+    BOLD        = '\033[1m'
+    UNDERLINE   = '\033[4m'
+
+
 def styl_log(string):
-    print '[STYL Extra Config Service]: INFO: {0}'.format(string)
+    print '[STYL Extra Config Service]: {1}INFO: {0} {2}'.format(string, bcolors.OKGREEN, bcolors.ENDC)
 
 def styl_error(string):
-    print '[STYL Extra Config Service]: ERROR: {0}'.format(string)
+    print '[STYL Extra Config Service]: {1}ERROR: {0} {2}'.format(string, bcolors.FAIL, bcolors.ENDC)
+
+def styl_debug(string):
+    print '[STYL Extra Config Service]: {1}DEBUG: {0} {2}'.format(string, bcolors.WARNING, bcolors.ENDC)
     
 def find_file_in_path(name, path):
     for root, dirs, files in os.walk(path):
