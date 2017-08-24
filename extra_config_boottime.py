@@ -35,14 +35,12 @@ def update_emv_configure_systemd_service_togle(is_start):
     try:
         if is_start:
             command = 'ps | grep -in "{0}" | grep -v grep'.format(SVC_APP)
-            styl_debug('PS command: {0}'.format(command))
             result = get_from_shell(command)
-            styl_debug('PS result: {0}'.format(result))
             if result:
                 styl_error('Conflict with {0} was already running'.format(SVC_APP))
                 return Error.FAIL
             else:
-                styl_debug('RESTART SVC')
+                styl_debug('Start styl-readersvcd.service')
                 manager.StopUnit('styl-yellowfin-extra-config-runtime.service', 'fail')
                 start_svc = True
                 manager.RestartUnit('styl-readersvcd.service', 'fail')
@@ -52,7 +50,6 @@ def update_emv_configure_systemd_service_togle(is_start):
                 manager.StopUnit('styl-readersvcd.service', 'fail')
                 styl_debug('Stop styl-readersvcd.service')
             else:
-                styl_debug('Do not stop styl-readersvcd.service')
             manager.RestartUnit('styl-yellowfin-extra-config-runtime.service', 'fail')
     except:
         return Error.FAIL
