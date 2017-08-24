@@ -31,7 +31,7 @@ def update_emv_configure_systemd_service_togle(is_start):
     manager = dbus.Interface(systemd1, 'org.freedesktop.systemd1.Manager')
     try:
         if is_start:
-            command = 'ps -auwx | grep -in "{0}" | grep -v grep'.format(SVC_APP)
+            command = 'ps | grep -in "{0}" | grep -v grep'.format(SVC_APP)
             result = get_from_shell(command)
             if result:
                 return Error.FAIL
