@@ -170,26 +170,29 @@ def update_wireless_passwd(directory, wireless_passwd):
         return Error.FAIL
     path = find_file_in_path(wireless_passwd, directory)
     if path:
-        lines = [line.rstrip('\n') for line in open(path)]
-        for line in lines:
-            #print 'Wireless update for: {0}'.format(line)
-            elements = line.split(":")
-            if len(elements)!=2:
-                return Error.FAIL
-            connection = update_wireless_passwd_connection_find_by_name(elements[0])
-            if connection:
-                #print "WIRELESS: UPDATE"
-                # update secrets then update connection
-                update_wireless_passwd_connection_change_secrets(CONNECTION_PATH, connection, elements[1])
-                # Change the connection with Update()
-                proxy = bus.get_object("org.freedesktop.NetworkManager", CONNECTION_PATH)
-                settings = dbus.Interface(proxy, "org.freedesktop.NetworkManager.Settings.Connection")
-                settings.Update(connection)
-            else:
-                #print "WIRELESS: NEW"
-                # create a new connection
-                update_wireless_passwd_connection_new(elements[0], elements[1])
-        return Error.SUCCESS
+        try:
+            lines = [line.rstrip('\n') for line in open(path)]
+            for line in lines:
+                #print 'Wireless update for: {0}'.format(line)
+                elements = line.split(":")
+                if len(elements)!=2:
+                    return Error.FAIL
+                connection = update_wireless_passwd_connection_find_by_name(elements[0])
+                if connection:
+                    #print "WIRELESS: UPDATE"
+                    # update secrets then update connection
+                    update_wireless_passwd_connection_change_secrets(CONNECTION_PATH, connection, elements[1])
+                    # Change the connection with Update()
+                    proxy = bus.get_object("org.freedesktop.NetworkManager", CONNECTION_PATH)
+                    settings = dbus.Interface(proxy, "org.freedesktop.NetworkManager.Settings.Connection")
+                    settings.Update(connection)
+                else:
+                    #print "WIRELESS: NEW"
+                    # create a new connection
+                    update_wireless_passwd_connection_new(elements[0], elements[1])
+            return Error.SUCCESS
+        except:
+            return Error.FAIL
     return Error.NONE
 # ################################################################################################################################################## #
 

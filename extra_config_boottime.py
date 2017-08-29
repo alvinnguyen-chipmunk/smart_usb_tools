@@ -66,13 +66,15 @@ def check_update_emv_configure(emv_location, emv_flag):
 
     if not os.path.exists(emv_location) or not os.path.exists(emv_checker):
         return False
+    try:
+        lines = [line.rstrip('\n') for line in open(emv_checker)]
+        if len(lines)!=1:
+            return False
 
-    lines = [line.rstrip('\n') for line in open(emv_checker)]
-    if len(lines)!=1:
+        if lines[0] == '1':
+            return True
+    except:
         return False
-
-    if lines[0] == '1':
-        return True
 
     return False
 
@@ -95,25 +97,28 @@ def update_emv_configure(emv_location, emv_load_config_sh, md5_file):
 
     #verify checksum
     os.chdir(emv_location)
-    lines = [line.rstrip('\n') for line in open(md5_file)]
-    for line in lines:
-        elements = re.findall(r"[\w'.]+", line)
-        # Correct original md5 goes here
-        original_md5 = elements[0]
-        file_name = elements[1]
-        try:
-            with open(file_name) as file_to_check:
-                # read contents of the file
-                data = file_to_check.read()
-                # pipe contents of the file through
-                md5_returned = hashlib.md5(data).hexdigest()
-            if original_md5 == md5_returned:
-                styl_log("MD5 verified.")
-            else:
-                styl_log("MD5 verification failed!.")
+    try:
+        lines = [line.rstrip('\n') for line in open(md5_file)]
+        for line in lines:
+            elements = re.findall(r"[\w'.]+", line)
+            # Correct original md5 goes here
+            original_md5 = elements[0]
+            file_name = elements[1]
+            try:
+                with open(file_name) as file_to_check:
+                    # read contents of the file
+                    data = file_to_check.read()
+                    # pipe contents of the file through
+                    md5_returned = hashlib.md5(data).hexdigest()
+                if original_md5 == md5_returned:
+                    styl_log("MD5 verified.")
+                else:
+                    styl_log("MD5 verification failed!.")
+                    is_error = True
+            except:
                 is_error = True
-        except:
-            is_error = True
+    except:
+        is_error = True
 
     if not is_error:
         command = '{0}'.format(emv_loader)
