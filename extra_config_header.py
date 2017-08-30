@@ -142,16 +142,20 @@ def styl_debug(string):
     print '[STYL Extra Config Service]: {1}DEBUG: {0} {2}'.format(string, bcolors.WARNING, bcolors.ENDC)
     
 def find_file_in_path(name, path):
-    for root, dirs, files in os.walk(path):
-        if name in files:
-            return os.path.join(root, name)
-    return None
+    try:
+        for root, dirs, files in os.walk(path):
+            if name in files:
+                return os.path.join(root, name)
+    except:
+        return None
 
 def find_dir_in_path(name, path):
-    for root, dirs, files in os.walk(path):
-        if name in dirs:
-            return os.path.join(root, name)
-    return None
+    try:
+        for root, dirs, files in os.walk(path):
+            if name in dirs:
+                return os.path.join(root, name)
+    except:
+        return None
 
 # Used as a quick way to handle shell commands #
 def get_from_shell_raw(command):
@@ -168,8 +172,11 @@ def get_from_shell(command):
     return result
 
 def exec_command(command):
-    result = subprocess.Popen(command, shell=True, stdout=None, stderr=None)
-    return result
+    try:
+        result = subprocess.Popen(command, shell=True, stdout=None, stderr=None)
+        return result
+    except:
+        return None
 
 def bash_command(command):
     try:
@@ -254,5 +261,6 @@ def led_alert_do(state, index, string):
     elif state == Error.NONE:
         led_alert_set(index, LED_COLOR.NONE_COLOR)
         styl_log('Not found {0}'.format(string))
+
 # ################################################################################################################################################## #
 

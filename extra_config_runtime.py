@@ -11,7 +11,7 @@
 ##  strictly limited by the confidential information provisions of the                                                          ##
 ##  agreement referenced above.                                                                                                 ##
 ##                                                                                                                              ##
-##  yellowfin-extra-service.py : Python script will to do:                                                                      ##
+##  extra_config_runtime.py : Python script will to do:                                                                         ##
 ##              - Detect USB plugin then mount FAT partitions on USB device                                                     ##
 ##              - Search for Wireless information, AGPS key information, EMV configure files, Test-tool flags                   ##
 ##              - If Wireless information found                                                                                 ##
@@ -28,7 +28,7 @@
 ##              - LED alert for working result                                                                                  ##
 ##                                                                                                                              ##
 ##       Create:    2017-07-06 14:30:00                                                                                         ##
-##       Modified:  2017-08-15 10:00:00                                                                                         ##
+##       Modified:  2017-08-30 08:30:00                                                                                         ##
 ##       Author:    Alvin Nguyen (alvin.nguyen@styl.solutions)                                                                  ##
 ##                                                                                                                              ##
 ##################################################################################################################################
@@ -56,29 +56,35 @@ def prepare_update_emv_configure(directory, emv_config_dir, emv_location, emv_lo
         return Error.FAIL
 
     # Gen md5 checksum information
-    os.chdir(new_config_dir)
-    command = 'md5sum *.json > {0}'.format(MD5_FILE)
-    exec_command(command)
-    command = '{0}/(1)'.format(new_config_dir, MD5_FILE)
-    if not os.path.exists(new_config_dir):
+    try:
+        os.chdir(new_config_dir)
+        command = 'md5sum *.json > {0}'.format(MD5_FILE)
+        exec_command(command)
+        command = '{0}/(1)'.format(new_config_dir, MD5_FILE)
+        if not os.path.exists(new_config_dir):
+            return Error.FAIL
+
+        # Copy all *.json files in new_config_dir to old EMV configure directory
+        command = 'cp {0}/*.json {1}'.format(new_config_dir, emv_location)
+        result = get_from_shell(command)
+        if result:
+            return Error.FAIL
+
+        # Copy checksum file in new_config_dir to old EMV configure directory
+        command = 'cp {0}/{1} {2}'.format(new_config_dir, MD5_FILE, emv_location)
+        result = get_from_shell(command)
+        if result:
+            return Error.FAIL
+
+        os.system("sync")
+        os.chdir(emv_location)
+
+        return Error.SUCCESS
+
+    except:
         return Error.FAIL
 
-    # Copy all *.json files in new_config_dir to old EMV configure directory
-    command = 'cp {0}/*.json {1}'.format(new_config_dir, emv_location)
-    result = get_from_shell(command)
-    if result:
-        return Error.FAIL
-
-    # Copy checksum file in new_config_dir to old EMV configure directory
-    command = 'cp {0}/{1} {2}'.format(new_config_dir, MD5_FILE, emv_location)
-    result = get_from_shell(command)
-    if result:
-        return Error.FAIL
-
-    os.system("sync")
-    os.chdir(emv_location)
-
-    return Error.SUCCESS
+    
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
@@ -168,9 +174,9 @@ def update_wireless_passwd_connection_find_by_name(name):
 def update_wireless_passwd(directory, wireless_passwd):
     if not directory or not wireless_passwd:
         return Error.FAIL
-    path = find_file_in_path(wireless_passwd, directory)
-    if path:
-        try:
+    try:
+        path = find_file_in_path(wireless_passwd, directory)
+        if path:        
             lines = [line.rstrip('\n') for line in open(path)]
             for line in lines:
                 #print 'Wireless update for: {0}'.format(line)
@@ -191,9 +197,9 @@ def update_wireless_passwd(directory, wireless_passwd):
                     # create a new connection
                     update_wireless_passwd_connection_new(elements[0], elements[1])
             return Error.SUCCESS
-        except:
-            return Error.FAIL
-    return Error.NONE
+        return Error.NONE
+    except:
+        return Error.FAIL
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
@@ -202,13 +208,16 @@ def execute_testtool_configure(directory, tt_pattern, tt_location, tt_option):
         return Error.FAIL
     if not os.path.exists(tt_location):
         return Error.NONE
-    path = find_file_in_path(tt_pattern, directory)
-    if path:
-        command = '{0} {1}'.format(tt_location, tt_option)
-        result = exec_command(command)
-        return Error.SUCCESS
-    else:
-        return Error.NONE
+    try:
+        path = find_file_in_path(tt_pattern, directory)
+        if path:
+            command = '{0} {1}'.format(tt_location, tt_option)
+            result = exec_command(command)
+            return Error.SUCCESS
+        else:
+            return Error.NONE
+    except:
+        return Error.FAIL
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
@@ -217,51 +226,59 @@ def update_geolocation_key(directory, stylagps_config, stylagps_location):
         return Error.FAIL
     if not os.path.exists(stylagps_location):
         return Error.NONE
-    path = find_file_in_path(stylagps_config, directory)
-    if path:
-        command = 'mv {0} {1}.bak'.format(stylagps_location, stylagps_location)
-        result = get_from_shell(command)
-        command = 'cp {0} {1}'.format(path, stylagps_location)
-        result = get_from_shell(command)
-        if not result:
-            return Error.SUCCESS
+    try:
+        path = find_file_in_path(stylagps_config, directory)
+        if path:
+            command = 'mv {0} {1}.bak'.format(stylagps_location, stylagps_location)
+            result = get_from_shell(command)
+            command = 'cp {0} {1}'.format(path, stylagps_location)
+            result = get_from_shell(command)
+            if not result:
+                return Error.SUCCESS
+            else:
+                return Error.FAIL
         else:
-            return Error.FAIL
-    else:
-        return Error.NONE
+            return Error.NONE
+    except:
+        return Error.FAIL
+
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
 def umount_action(partition, directory):
-    timeout = TimeOut(TIMEOUT_VALUE)
-    command = 'umount {0}'.format(partition)
-    result = get_from_shell(command)
-    if not result:
-        return Error.SUCCESS
+    try:
+        command = 'umount {0}'.format(partition)
+        result = get_from_shell(command)
+        if not result:
+            return Error.SUCCESS
+    except:
+        return Error.FAIL
     return Error.FAIL
 
 def mount_action(partition, directory):
-    if CHECK_FSTYPE:
-        command = 'file -s {0}'.format(partition)
+    try:
+        if CHECK_FSTYPE:
+            command = 'file -s {0}'.format(partition)
+            result = get_from_shell(command)
+            if not result:
+                return Error.FAIL
+
+            #if result[0].find(CHECK_FSTYPE_1)==-1:
+            #    return False
+            if result[0].find(CHECK_FSTYPE_2)==-1:
+                return Error.NONE
+            else:
+                styl_log('Found a partition with {0} type'.format(CHECK_FSTYPE_2))
+
+        command = 'mkdir -p {0}'.format(directory)
         result = get_from_shell(command)
         if not result:
-            return Error.FAIL
-
-        #if result[0].find(CHECK_FSTYPE_1)==-1:
-        #    return False
-        if result[0].find(CHECK_FSTYPE_2)==-1:
-            return Error.NONE
-        else:
-            styl_log('Found a partition with {0} type'.format(CHECK_FSTYPE_2))
-
-    command = 'mkdir -p {0}'.format(directory)
-    result = get_from_shell(command)
-    if not result:
-        command = 'mount {0} {1}'.format(partition, directory)
-        result = get_from_shell(command)
-        if not result and os.path.ismount(directory):
-            return Error.SUCCESS
-
+            command = 'mount {0} {1}'.format(partition, directory)
+            result = get_from_shell(command)
+            if not result and os.path.ismount(directory):
+                return Error.SUCCESS
+    except:
+        return Error.FAIL
     return Error.FAIL
 # ################################################################################################################################################## #
 

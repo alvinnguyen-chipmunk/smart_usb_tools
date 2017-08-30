@@ -11,14 +11,14 @@
 ##  strictly limited by the confidential information provisions of the                                                          ##
 ##  agreement referenced above.                                                                                                 ##
 ##                                                                                                                              ##
-##  yellowfin-extra-bootup.py : Python script will be execute by script on /etc/profile                                         ##
+##  extra_config_boottime.py : Python script will be execute by script on /etc/profile                                          ##
 ##              - Check flags of EMV configure reload                                                                           ##
 ##              - If the flags is enable                                                                                        ##
 ##                  + Update EMV configure files                                                                                ##
 ##              - LED alert for working result                                                                                  ##
 ##                                                                                                                              ##
 ##       Create:    2017-08-15 10:00:00                                                                                         ##
-##       Modified:  --                                                                                                          ##
+##       Modified:  2017-08-30 08:30:00                                                                                                         ##
 ##       Author:    Alvin Nguyen (alvin.nguyen@styl.solutions)                                                                  ##
 ##                                                                                                                              ##
 ##################################################################################################################################
@@ -75,9 +75,7 @@ def check_update_emv_configure(emv_location, emv_flag):
             return True
     except:
         return False
-
     return False
-
 
 def update_emv_configure(emv_location, emv_load_config_sh, md5_file):
     if not emv_location or not emv_load_config_sh or not md5_file:
@@ -96,8 +94,8 @@ def update_emv_configure(emv_location, emv_load_config_sh, md5_file):
     is_error = False
 
     #verify checksum
-    os.chdir(emv_location)
     try:
+        os.chdir(emv_location)    
         lines = [line.rstrip('\n') for line in open(md5_file)]
         for line in lines:
             elements = re.findall(r"[\w'.]+", line)
