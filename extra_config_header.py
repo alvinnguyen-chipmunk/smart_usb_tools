@@ -43,6 +43,7 @@ CHECK_FSTYPE                = True
 # STYLAGPS global variable
 STYLAGPS_CONFIG             = "stylagps.conf"
 STYLAGPS_LOCATION           = "/etc/stylagps/stylagps.conf"
+STYLAGPS_PKGCONFIG          = "stylagps"
 
 # Wireless global variable
 WIRELESS_PASSWD             = "wireless.passwd"
@@ -264,3 +265,14 @@ def led_alert_do(state, index, string):
 
 # ################################################################################################################################################## #
 
+# ################################################################################################################################################## #
+def pkgconfig_exists(package):
+    """
+    Return True if package information is available.
+
+    If ``pkg-config`` not on path, raises ``EnvironmentError``.
+    """
+    pkg_config_exe = os.environ.get('PKG_CONFIG', None) or 'pkg-config'
+    cmd = '{0} --exists {1}'.format(pkg_config_exe, package).split()
+    return subprocess.call(cmd) == 0
+# ################################################################################################################################################## #

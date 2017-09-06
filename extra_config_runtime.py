@@ -224,8 +224,10 @@ def execute_testtool_configure(directory, tt_pattern, tt_location, tt_option):
 def update_geolocation_key(directory, stylagps_config, stylagps_location):
     if not directory or not stylagps_config or not stylagps_location:
         return Error.FAIL
-    if not os.path.exists(stylagps_location):
+    
+    if not pkgconfig_exists(STYLAGPS_PKGCONFIG):
         return Error.NONE
+
     try:
         path = find_file_in_path(stylagps_config, directory)
         if path:
