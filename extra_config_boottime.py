@@ -41,15 +41,16 @@ def update_emv_configure_systemd_service_togle(is_start):
                 return Error.FAIL
             else:
                 styl_debug('Start styl-readersvcd.service')
-                manager.StopUnit('styl-yellowfin-extra-config-runtime.service', 'fail')
                 start_svc = True
                 manager.RestartUnit('styl-readersvcd.service', 'fail')
+                
+            manager.StopUnit('styl-yellowfin-extra-config-runtime.service', 'fail')
         else:
             
             if start_svc:
                 manager.StopUnit('styl-readersvcd.service', 'fail')
                 styl_debug('Stop styl-readersvcd.service')
-            else:
+
             manager.RestartUnit('styl-yellowfin-extra-config-runtime.service', 'fail')
     except:
         return Error.FAIL
