@@ -225,7 +225,7 @@ def update_geolocation_key(directory, stylagps_config, stylagps_location):
     if not directory or not stylagps_config or not stylagps_location:
         return Error.FAIL
     
-    if not pkgconfig_exists(STYLAGPS_PKGCONFIG):
+    if not library_is_exist(STYLAGPS_PKGCONFIG):
         return Error.NONE
 
     try:

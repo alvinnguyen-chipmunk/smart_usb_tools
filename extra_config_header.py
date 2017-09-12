@@ -72,6 +72,8 @@ PD9535_OUT_REG_PORT0        = 0x02
 PD9535_OUT_REG_PORT1        = 0x03
 PD9535_CONFIG_OUT_PORT      = 0x00
 
+LDCONFIG_TOOL               = "/sbin/ldconfig"
+
 # Return value class
 class Error:
     SUCCESS     = 1
@@ -266,13 +268,10 @@ def led_alert_do(state, index, string):
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
-def pkgconfig_exists(package):
-    """
-    Return True if package information is available.
-
-    If ``pkg-config`` not on path, raises ``EnvironmentError``.
-    """
-    pkg_config_exe = os.environ.get('PKG_CONFIG', None) or 'pkg-config'
-    cmd = '{0} --exists {1}'.format(pkg_config_exe, package).split()
-    return subprocess.call(cmd) == 0
+def library_is_exist(package):
+    command = '{0} -p | grep {1}'.format(LDCONFIG_TOOL, package)
+    try:
+        return os.system(command) == 0
+    except:
+        return -101
 # ################################################################################################################################################## #
