@@ -203,17 +203,20 @@ def update_wireless_passwd(directory, wireless_passwd):
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
-def execute_testtool_configure(directory, tt_pattern, tt_location, tt_option):
-    if not directory or not tt_pattern or not tt_location or not tt_option:
+def execute_testtool_configure(directory, tt_pattern, tt_flags, tt_flags_dir):
+    if not directory or not tt_pattern or not tt_flags or not tt_flags_dir:
         return Error.FAIL
-    if not os.path.exists(tt_location):
-        return Error.NONE
+
     try:
         path = find_file_in_path(tt_pattern, directory)
         if path:
-            command = '{0} {1}'.format(tt_location, tt_option)
-            result = exec_command(command)
-            return Error.SUCCESS
+            # Create a flag file for factory testtool application if it is't exist    
+            if not find_file_in_path(tt_flags, tt_flags_dir):
+                command = 'touch {0}/{1}'.format(tt_flags_dir, tt_flags)
+                if get_from_shell(command):
+                    styl_error("Create flag file of factory testtool fail.")
+                    return Error.FAIL
+            return execute_testtool_configure_do(tt_flags, tt_flags_dir)
         else:
             return Error.NONE
     except:
@@ -272,13 +275,13 @@ def mount_action(partition, directory):
             else:
                 styl_log('Found a partition with {0} type'.format(CHECK_FSTYPE_2))
 
-        command = 'mkdir -p {0}'.format(directory)
-        result = get_from_shell(command)
-        if not result:
-            command = 'mount {0} {1}'.format(partition, directory)
+            command = 'mkdir -p {0}'.format(directory)
             result = get_from_shell(command)
-            if not result and os.path.ismount(directory):
-                return Error.SUCCESS
+            if not result:
+                command = 'mount {0} {1}'.format(partition, directory)
+                result = get_from_shell(command)
+                if not result and os.path.ismount(directory):
+                    return Error.SUCCESS
     except:
         return Error.FAIL
     return Error.FAIL
@@ -324,7 +327,7 @@ def device_event(device):
                     os.system("sync")
 
                 # Search and run test tool
-                state = execute_testtool_configure(MOUNT_DIR, TT_PATTERN, TT_LOCATION, TT_OPTION)
+                state = execute_testtool_configure(MOUNT_DIR, TT_PATTERN, TT_FLAGS, TT_FLAGS_DIR)
                 led_alert_do(state, LED.TESTTOOL, 'TestTool Flags')
 
                 # Done, now umount for this partition
@@ -346,11 +349,11 @@ def device_event(device):
 
 # ################################################################################################################################################## #
 if __name__ == '__main__':
-    styl_log('Start')
+    styl_log('Start')	
 
     # Initialization I2C LED
     led_alert_init()
-    led_alert_set_all(LED_COLOR.OFF_COLOR)
+    led_alert_set_all(LED_COLOR.OFF_COLOR)    
     
     home_dir = os.path.expanduser("~")
     MOUNT_DIR = '{0}/{1}'.format(home_dir, MOUNT_DIR)

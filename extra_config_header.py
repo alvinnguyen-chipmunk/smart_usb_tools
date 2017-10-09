@@ -54,15 +54,15 @@ EMV_FLAG                    = "emv_flag"
 EMV_CONFIG_DIR              = "emv"
 EMV_LOCATION                = "/home/root/emv"
 EMV_LOAD_CONFIG_SH          = "emv_load_config.sh"
-SVC_APP                     = "svc"
+SVC_APP                     = "/home/root/svc"
 USE_SVC_SYSTEMD             = False
 MD5_FILE                    = "checksum-md5"
 EMV_FLAG_PATH               = "/home/root/emv/update"
 
 # TestTool global variable
 TT_PATTERN                  = "yellowfin_test_tool"
-TT_LOCATION                 = "/usr/bin/BVFactoryTestTool"
-TT_OPTION                   = "--platform linuxfb"
+TT_FLAGS_DIR                = "/var"
+TT_FLAGS                    = "factorytest.mrk"
 
 # LED global variable
 STYL_LED_BOARD_I2C_ADDRESS  = 0x20
@@ -73,6 +73,21 @@ PD9535_OUT_REG_PORT1        = 0x03
 PD9535_CONFIG_OUT_PORT      = 0x00
 
 LDCONFIG_TOOL               = "/sbin/ldconfig"
+
+# Some daemon name
+SYSTEMD_READER_SVC          = "styl-readersvcd.service"
+SYSTEMD_APLAY               = "styl-aplayd.service"
+SYSTEMD_TESTTOOL            = "styl-factory-test-tool.service"
+SYSTEMD_EXTRASERVICE        = "styl-yellowfin-extra-config-runtime.service"
+
+# Index for DBUS Struct element
+# Visit https://www.freedesktop.org/wiki/Software/systemd/dbus/ for more index 
+DBUS_STRUCT_NAME            = 0 # The primary unit name as string
+DBUS_STRUCT_READABLE        = 1 # The human readable description string
+DBUS_STRUCT_LOADSTATE       = 2 # The load state (i.e. whether the unit file has been loaded successfully)
+DBUS_STRUCT_ACTIVESTATE     = 3 # The active state (i.e. whether the unit is currently started or not)
+DBUS_STRUCT_SUBSTATE        = 4 # The sub state (a more fine-grained version of the active state that is specific to the unit type, which the active state is not)
+
 
 # Return value class
 class Error:
@@ -141,8 +156,11 @@ def styl_log(string):
 def styl_error(string):
     print '[STYL Extra Config Service]: {1}ERROR: {0} {2}'.format(string, bcolors.FAIL, bcolors.ENDC)
 
+def styl_warning(string):
+    print '[STYL Extra Config Service]: {1}ERROR: {0} {2}'.format(string, bcolors.WARNING, bcolors.ENDC)
+
 def styl_debug(string):
-    print '[STYL Extra Config Service]: {1}DEBUG: {0} {2}'.format(string, bcolors.WARNING, bcolors.ENDC)
+    print '[STYL Extra Config Service]: {1}DEBUG: {0} {2}'.format(string, bcolors.OKBLUE, bcolors.ENDC)
     
 def find_file_in_path(name, path):
     try:
@@ -257,21 +275,66 @@ def led_alert_set_all(light_color):
 def led_alert_do(state, index, string):
     if state == Error.FAIL:
         led_alert_set(index, LED_COLOR.FAILURE_COLOR)
-        styl_log('Update {0} fail'.format(string))
+        styl_log('Processing for {0} fail'.format(string))
     elif state == Error.SUCCESS:
         led_alert_set(index, LED_COLOR.SUCCESS_COLOR)
-        styl_log('Update {0} success'.format(string))
+        styl_log('Processing for {0} success'.format(string))
     elif state == Error.NONE:
         led_alert_set(index, LED_COLOR.NONE_COLOR)
-        styl_log('Not found {0}'.format(string))
+        styl_log('Do not anything for {0}'.format(string))
 
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
 def library_is_exist(package):
-    command = '{0} -p | grep {1}'.format(LDCONFIG_TOOL, package)
+    command = '{0} -p | grep {1} > /dev/null'.format(LDCONFIG_TOOL, package)
     try:
         return os.system(command) == 0
     except:
         return -101
+# ################################################################################################################################################## #
+
+# ################################################################################################################################################## #
+def svc_check_exist():
+    command = 'ps | grep -in "{0}" | grep -v grep'.format(SVC_APP)
+    result = get_from_shell(command)
+    if result:
+        #styl_error('Conflict with '{0}' was already running'.format(SVC_APP))
+        return True
+    return False
+# ################################################################################################################################################## #
+
+# ################################################################################################################################################## #
+def execute_testtool_configure_execute(tt_flags, tt_flags_dir, systemd_manager):
+    systemd_manager.StartUnit(SYSTEMD_TESTTOOL, 'replace')
+    sleep(0.25)
+    return Error.SUCCESS
+# ################################################################################################################################################## #
+
+# ################################################################################################################################################## #
+def execute_testtool_configure_do(tt_flags, tt_flags_dir):
+    try:
+        systemd1 = bus.get_object('org.freedesktop.systemd1',  '/org/freedesktop/systemd1')
+        manager = dbus.Interface(systemd1, 'org.freedesktop.systemd1.Manager')
+
+        all_service = manager.ListUnits()
+
+        for service_iter in all_service:
+            if service_iter[DBUS_STRUCT_NAME] == SYSTEMD_TESTTOOL:
+                if service_iter[DBUS_STRUCT_ACTIVESTATE] == "active" and  service_iter[DBUS_STRUCT_SUBSTATE] == "running":
+                    styl_log("Ignore Factory Testtool flag because Factory Testtool already was running.")
+                    return Error.NONE
+
+        if svc_check_exist():
+            for service_iter in all_service:
+                if service_iter[DBUS_STRUCT_NAME] == SYSTEMD_READER_SVC:
+                    if service_iter[DBUS_STRUCT_ACTIVESTATE] == "active" and  service_iter[DBUS_STRUCT_SUBSTATE] == "running":
+                        # if svc is running, will execute factory testool application when svc be executed by styl-readersvcd service (SYSTEMD_READER_SVC)
+                        return execute_testtool_configure_execute(tt_flags, tt_flags_dir, manager)                            
+            return Error.FAIL
+        else:
+            # if svc isn't running, will execute factory testool application.
+            return execute_testtool_configure_execute(tt_flags, tt_flags_dir, manager)
+    except:
+        return Error.FAIL
 # ################################################################################################################################################## #

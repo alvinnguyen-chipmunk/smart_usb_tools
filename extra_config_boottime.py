@@ -26,6 +26,21 @@
 from extra_config_header import *
 
 start_svc = False
+# ################################################################################################################################################## #
+def systemd_workaround():
+    try:
+        systemd1 = bus.get_object('org.freedesktop.systemd1',  '/org/freedesktop/systemd1')
+        manager = dbus.Interface(systemd1, 'org.freedesktop.systemd1.Manager')
+        
+        manager.StopUnit(SYSTEMD_TESTTOOL, 'replace')
+        manager.StopUnit(SYSTEMD_READER_SVC, 'replace')
+        manager.StopUnit(SYSTEMD_APLAY, 'replace')
+        
+        styl_log('Systemd workaround done.')
+    except:
+        styl_error('Systemd workaround FAIL.')
+
+# ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
 def update_emv_configure_systemd_service_togle(is_start):
@@ -40,18 +55,18 @@ def update_emv_configure_systemd_service_togle(is_start):
                 styl_error('Conflict with {0} was already running'.format(SVC_APP))
                 return Error.FAIL
             else:
-                styl_debug('Start styl-readersvcd.service')
+                styl_debug(SYSTEMD_READER_SVC)
                 start_svc = True
-                manager.RestartUnit('styl-readersvcd.service', 'fail')
+                manager.RestartUnit(SYSTEMD_READER_SVC, 'replace')
                 
-            manager.StopUnit('styl-yellowfin-extra-config-runtime.service', 'fail')
+            manager.StopUnit(SYSTEMD_EXTRASERVICE, 'replace')
         else:
             
             if start_svc:
-                manager.StopUnit('styl-readersvcd.service', 'fail')
-                styl_debug('Stop styl-readersvcd.service')
+                manager.StopUnit(SYSTEMD_READER_SVC, 'replace')
+                styl_debug('Stop {0}'.format(SYSTEMD_READER_SVC))
 
-            manager.RestartUnit('styl-yellowfin-extra-config-runtime.service', 'fail')
+            manager.RestartUnit(SYSTEMD_EXTRASERVICE, 'replace')
     except:
         return Error.FAIL
     
@@ -140,12 +155,13 @@ if __name__ == '__main__':
     # Initialization I2C LED
     led_alert_init()
     led_alert_set_all(LED_COLOR.OFF_COLOR)
+    systemd_workaround()
 
     # Check need update EMV configure and do it if needed
     state = check_update_emv_configure(EMV_LOCATION, EMV_FLAG)
     if state:    
         led_alert_set_all(LED_COLOR.RUNNING_COLOR)
-        styl_log('CHECK UPDATE EMV CONFIGURE IS: OK')
+        styl_log('EMV configure update flag: enable')
         state = update_emv_configure(EMV_LOCATION, EMV_LOAD_CONFIG_SH, MD5_FILE)
         led_alert_do(state, LED.EMV_UPDATE, 'EMV Configure Reload')
         command = 'echo  0 > {0}/{1}'.format(EMV_LOCATION, EMV_FLAG)
@@ -155,9 +171,17 @@ if __name__ == '__main__':
         
         # Stop readersvcd service
         update_emv_configure_systemd_service_togle(False)
-
     else:
-        styl_log('CHECK UPDATE EMV CONFIGURE IS: NO')
+        styl_log('EMV configure update flag: disable')
+
+    # Check flag file for factory testool
+    if find_file_in_path(TT_FLAGS, TT_FLAGS_DIR):
+        if execute_testtool_configure_do(TT_FLAGS, TT_FLAGS_DIR) == Error.FAIL:
+            styl_error('Execute Factory Testtool fail.')
+        else:
+            styl_log('Execute Factory Testtool success.')
+    else:
+        styl_log('Factory Testtool was executed before.')    
 
     led_alert_set_all(LED_COLOR.OFF_COLOR)
     styl_log('Exit extra service script .......')
