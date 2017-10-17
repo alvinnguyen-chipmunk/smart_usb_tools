@@ -212,7 +212,7 @@ def execute_testtool_configure(directory, tt_pattern, tt_flags, tt_flags_dir):
         if path:
             # Create a flag file for factory testtool application if it is't exist    
             if not find_file_in_path(tt_flags, tt_flags_dir):
-                command = 'touch {0}/{1}'.format(tt_flags_dir, tt_flags)
+                command = 'echo "testing" > {0}/{1}'.format(tt_flags_dir, tt_flags)
                 if get_from_shell(command):
                     styl_error("Create flag file of factory testtool fail.")
                     return Error.FAIL
