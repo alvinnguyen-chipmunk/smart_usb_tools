@@ -59,6 +59,12 @@ USE_SVC_SYSTEMD             = False
 MD5_FILE                    = "checksum-md5"
 EMV_FLAG_PATH               = "/home/root/emv/update"
 
+# SCANNER global variable
+SCANNER_FLAG		    = "scanner_flag"
+SCANNER_FLAG_PATH	    = "/home/root/scanner/update"
+SCANNER_SETUP_UTILS_PATH    = "/usr/bin"
+SCANNER_SETUP_UTILS	    = "StylScannerSetup"
+
 # TestTool global variable
 TT_PATTERN                  = "yellowfin_test_tool"
 TT_FLAGS_DIR                = "/var"

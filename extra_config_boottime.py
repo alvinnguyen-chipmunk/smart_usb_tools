@@ -74,6 +74,32 @@ def update_emv_configure_systemd_service_togle(is_start):
 
     return Error.SUCCESS
 
+def check_running_setup_scanner(scanner_flag_path, scanner_flag):
+	if not scanner_flag_path or not scanner_flag:
+		return False;
+	scanner_checker = '{0}/{1}'.format(scanner_flag_path, scanner_flag)
+	if not os.path.exists(scanner_checker):
+		return False
+	try:
+        	lines = [line.rstrip('\n') for line in open(scanner_checker)]
+		if len(lines)!=1:
+			return False
+
+		if lines[0] == '1':
+			return True
+	except:
+		return False
+	return False
+def setup_scanner_auto_mode(scanner_utils_path, scanner_utils):
+	if not scanner_utils_path or not scanner_utils:
+		return Error.FAIL
+	scanner_setup = '{0}/{1}'.format(scanner_utils_path, scanner_utils)
+	if not os.path.exists(scanner_setup):
+		return Error.FAIL
+	command = '{0}'.format(scanner_setup)
+        result = exec_command(command)
+        return result
+
 def check_update_emv_configure(emv_location, emv_flag):
     if not emv_location or not emv_flag:
         return False
@@ -91,7 +117,7 @@ def check_update_emv_configure(emv_location, emv_flag):
             return True
     except:
         return False
-    return False
+    return False	
 
 def update_emv_configure(emv_location, emv_load_config_sh, md5_file):
     if not emv_location or not emv_load_config_sh or not md5_file:
@@ -156,6 +182,21 @@ if __name__ == '__main__':
     led_alert_init()
     led_alert_set_all(LED_COLOR.OFF_COLOR)
     systemd_workaround()
+	
+    # Check need run STYL Setup Scanner
+    state = check_running_setup_scanner(SCANNER_FLAG_PATH, SCANNER_FLAG)
+    if state:
+	state = setup_scanner_auto_mode(SCANNER_SETUP_UTILS_PATH, SCANNER_SETUP_UTILS)
+	command = 'echo  0 > {0}/{1}'.format(SCANNER_FLAG_PATH, SCANNER_FLAG)
+        result = exec_command(command)
+        os.system('sync')
+# Got Bug here
+#	if state == 0:
+#		styl_log('Execute Sacnner Setup success.')
+#	else:
+#		styl_log('Execute Sacnner Setup failed.')
+    else:
+	 styl_log('Scanner configure update flag: disable')
 
     # Check need update EMV configure and do it if needed
     state = check_update_emv_configure(EMV_LOCATION, EMV_FLAG)
