@@ -64,6 +64,7 @@ SCANNER_FLAG		    = "scanner_flag"
 SCANNER_FLAG_PATH	    = "/home/root/scanner/update"
 SCANNER_SETUP_UTILS_PATH    = "/usr/bin"
 SCANNER_SETUP_UTILS	    = "StylScannerSetup"
+SCANNER_PATTERN		    = "scanner_setup"
 
 # TestTool global variable
 TT_PATTERN                  = "yellowfin_test_tool"
@@ -183,6 +184,8 @@ def find_dir_in_path(name, path):
                 return os.path.join(root, name)
     except:
         return None
+def is_dir_exist(path):
+	return os.path.isdir(path)
 
 # Used as a quick way to handle shell commands #
 def get_from_shell_raw(command):

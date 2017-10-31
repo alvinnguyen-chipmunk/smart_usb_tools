@@ -221,6 +221,30 @@ def execute_testtool_configure(directory, tt_pattern, tt_flags, tt_flags_dir):
             return Error.NONE
     except:
         return Error.FAIL
+
+# ################################################################################################################################################## #
+
+# ################################################################################################################################################## #
+def execute_scanner_configure(directory, scanner_pattern, scanner_flag, scanner_flag_dir):
+	if not directory or not scanner_pattern or not scanner_flag or not scanner_flag_dir:
+		return Error.FAIL
+	if not is_dir_exist(scanner_flag_dir):
+		command = 'mkdir -p {0}'.format(scanner_flag_dir)		
+		if get_from_shell(command):
+			styl_error("create flag directory of scanner setup fail.")
+			return Error.FAIL
+	try:
+		path = find_file_in_path(scanner_pattern, directory)
+		if path:
+			
+			command = 'echo 1 > {0}/{1}'.format(scanner_flag_dir, scanner_flag)
+			if get_from_shell(command):
+				styl_error("create flag file of scanner setup fail.")
+				return Error.FAIL
+		else:
+			return Error.NONE
+	except:
+		return Error.FAIL
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
@@ -325,7 +349,11 @@ def device_event(device):
                     command = 'echo  1 > {0}/{1}'.format(EMV_LOCATION, EMV_FLAG)
                     result = exec_command(command)
                     os.system("sync")
-
+		
+		# Search and run scanner configure
+		state = execute_scanner_configure(MOUNT_DIR, SCANNER_PATTERN, SCANNER_FLAG, SCANNER_FLAG_PATH)
+		# Check error code then show to user
+		
                 # Search and run test tool
                 state = execute_testtool_configure(MOUNT_DIR, TT_PATTERN, TT_FLAGS, TT_FLAGS_DIR)
                 led_alert_do(state, LED.TESTTOOL, 'TestTool Flags')
