@@ -339,7 +339,7 @@ def device_event(device):
 
                 # Search and update for Google geolocation API key
                 state = update_geolocation_key(MOUNT_DIR, STYLAGPS_CONFIG, STYLAGPS_LOCATION)
-                led_alert_done(Error.FAIL, LED.AGPS, 'Google geolocation API key')
+                led_alert_done(state, LED.AGPS, 'Google geolocation API key')
 
                 # Search and update for Wireless password
                 state = update_wireless_passwd(MOUNT_DIR, WIRELESS_PASSWD)
