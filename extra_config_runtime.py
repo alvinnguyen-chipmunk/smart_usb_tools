@@ -226,25 +226,27 @@ def execute_testtool_configure(directory, tt_pattern, tt_flags, tt_flags_dir):
 
 # ################################################################################################################################################## #
 def execute_scanner_configure(directory, scanner_pattern, scanner_flag, scanner_flag_dir):
-	if not directory or not scanner_pattern or not scanner_flag or not scanner_flag_dir:
-		return Error.FAIL
-	if not is_dir_exist(scanner_flag_dir):
-		command = 'mkdir -p {0}'.format(scanner_flag_dir)		
-		if get_from_shell(command):
-			styl_error("create flag directory of scanner setup fail.")
-			return Error.FAIL
-	try:
-		path = find_file_in_path(scanner_pattern, directory)
-		if path:
-			
-			command = 'echo 1 > {0}/{1}'.format(scanner_flag_dir, scanner_flag)
-			if get_from_shell(command):
-				styl_error("create flag file of scanner setup fail.")
-				return Error.FAIL
-		else:
-			return Error.NONE
-	except:
-		return Error.FAIL
+    if not directory or not scanner_pattern or not scanner_flag or not scanner_flag_dir:
+        return Error.FAIL
+    if not is_dir_exist(scanner_flag_dir):
+        command = 'mkdir -p {0}'.format(scanner_flag_dir)
+        result = get_from_shell(command)
+        if get_from_shell(command):
+            styl_error("Create flag directory of scanner setup fail.")
+            return Error.FAIL
+    try:
+        path = find_file_in_path(scanner_pattern, directory)
+        if path:
+            command = 'echo 1 > {0}/{1}'.format(scanner_flag_dir, scanner_flag)
+            if get_from_shell(command):
+                styl_error("Create flag file of scanner setup fail.")
+                return Error.FAIL
+        else:
+            return Error.NONE
+    except:
+        return Error.FAIL
+
+    return Error.SUCCESS
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
@@ -275,15 +277,16 @@ def update_geolocation_key(directory, stylagps_config, stylagps_location):
 
 # ################################################################################################################################################## #
 def umount_action(partition, directory):
+    styl_log('Umount partition')
     try:
         command = 'umount {0}'.format(partition)
         result = get_from_shell(command)
+        styl_debug('Umount result: {0}'.format(result))
         if not result:
             return Error.SUCCESS
     except:
         return Error.FAIL
     return Error.FAIL
-
 def mount_action(partition, directory):
     try:
         if CHECK_FSTYPE:
@@ -304,6 +307,7 @@ def mount_action(partition, directory):
             if not result:
                 command = 'mount {0} {1}'.format(partition, directory)
                 result = get_from_shell(command)
+                styl_debug('Mount result: {0}'.format(result))
                 if not result and os.path.ismount(directory):
                     return Error.SUCCESS
     except:
@@ -328,43 +332,43 @@ def device_event(device):
         partition = device.device_node
 
         if partition:
+            styl_log('New partition: {0}'.format(partition))
             # Mount partitions on USB device
             state = mount_action(partition, MOUNT_DIR)
-            if state==Error.SUCCESS:
-                # Set running state for I2C LED
-                led_alert_set_all(LED_COLOR.RUNNING_COLOR)
+            if state == Error.SUCCESS:
 
                 # Search and update for Google geolocation API key
                 state = update_geolocation_key(MOUNT_DIR, STYLAGPS_CONFIG, STYLAGPS_LOCATION)
-                led_alert_do(state, LED.AGPS, 'Google geolocation API key')
+                led_alert_done(Error.FAIL, LED.AGPS, 'Google geolocation API key')
 
                 # Search and update for Wireless password
                 state = update_wireless_passwd(MOUNT_DIR, WIRELESS_PASSWD)
-                led_alert_do(state, LED.WIFI, 'Wifi information')
+                led_alert_done(state, LED.WIFI, 'Wireless Connection')
 
                 # Search and prepare to update for EMV configure
                 state = prepare_update_emv_configure(MOUNT_DIR, EMV_CONFIG_DIR, EMV_LOCATION, EMV_LOAD_CONFIG_SH, MD5_FILE)
-                led_alert_do(state, LED.EMV, 'EMV Configure')
+                led_alert_done(state, LED.EMV, 'EMV Get Configure')
                 if state==Error.SUCCESS:
                     command = 'echo  1 > {0}/{1}'.format(EMV_LOCATION, EMV_FLAG)
                     result = exec_command(command)
                     os.system("sync")
-		
-		# Search and run scanner configure
-		state = execute_scanner_configure(MOUNT_DIR, SCANNER_PATTERN, SCANNER_FLAG, SCANNER_FLAG_PATH)
-		# Check error code then show to user
-		
+
+                # Search and run scanner configure
+                state = execute_scanner_configure(MOUNT_DIR, SCANNER_PATTERN, SCANNER_FLAG, SCANNER_FLAG_PATH)
+                led_alert_done(state, LED.SCANNER, 'Scanner Request Setup')
+
                 # Search and run test tool
                 state = execute_testtool_configure(MOUNT_DIR, TT_PATTERN, TT_FLAGS, TT_FLAGS_DIR)
-                led_alert_do(state, LED.TESTTOOL, 'TestTool Flags')
+                led_alert_done(state, LED.TESTTOOL, 'Factory Testtool Execute')
 
                 # Done, now umount for this partition
                 state = umount_action(partition, MOUNT_DIR)
                 if state==Error.SUCCESS:
-                    led_alert_flicker(LED_COLOR.OFF_COLOR)
+                    led_alert_flash(LED_COLOR.OFF_COLOR, LED_COLOR.RUNNING_COLOR)
 
             elif state==Error.FAIL:
                 led_alert_set_all(LED_COLOR.MOUNT_COLOR)
+                styl_error('Mount parition failure.')
             elif state==Error.NONE:
                 styl_log('Not found FAT partition in device.')
 

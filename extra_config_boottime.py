@@ -55,7 +55,6 @@ def update_emv_configure_systemd_service_togle(is_start):
                 styl_error('Conflict with {0} was already running'.format(SVC_APP))
                 return Error.FAIL
             else:
-                styl_debug(SYSTEMD_READER_SVC)
                 start_svc = True
                 manager.RestartUnit(SYSTEMD_READER_SVC, 'replace')
                 
@@ -64,7 +63,6 @@ def update_emv_configure_systemd_service_togle(is_start):
             
             if start_svc:
                 manager.StopUnit(SYSTEMD_READER_SVC, 'replace')
-                styl_debug('Stop {0}'.format(SYSTEMD_READER_SVC))
 
             manager.RestartUnit(SYSTEMD_EXTRASERVICE, 'replace')
     except:
@@ -75,30 +73,37 @@ def update_emv_configure_systemd_service_togle(is_start):
     return Error.SUCCESS
 
 def check_running_setup_scanner(scanner_flag_path, scanner_flag):
-	if not scanner_flag_path or not scanner_flag:
-		return False;
-	scanner_checker = '{0}/{1}'.format(scanner_flag_path, scanner_flag)
-	if not os.path.exists(scanner_checker):
-		return False
-	try:
-        	lines = [line.rstrip('\n') for line in open(scanner_checker)]
-		if len(lines)!=1:
-			return False
+    if not scanner_flag_path or not scanner_flag:
+        return False;
 
-		if lines[0] == '1':
-			return True
-	except:
-		return False
-	return False
+    scanner_checker = '{0}/{1}'.format(scanner_flag_path, scanner_flag)
+    if not os.path.exists(scanner_checker):
+        return False
+    try:
+        lines = [line.rstrip('\n') for line in open(scanner_checker)]
+        if len(lines)!=1:
+            return False
+        if lines[0] == '1':
+            return True
+    except:
+        return False
+    return False
+
 def setup_scanner_auto_mode(scanner_utils_path, scanner_utils):
-	if not scanner_utils_path or not scanner_utils:
-		return Error.FAIL
-	scanner_setup = '{0}/{1}'.format(scanner_utils_path, scanner_utils)
-	if not os.path.exists(scanner_setup):
-		return Error.FAIL
-	command = '{0}'.format(scanner_setup)
-        result = exec_command(command)
-        return result
+    if not scanner_utils_path or not scanner_utils:
+        return Error.FAIL
+
+    scanner_setup = '{0}/{1}'.format(scanner_utils_path, scanner_utils)
+    if not os.path.exists(scanner_setup):
+        return Error.FAIL
+
+    command = '{0}'.format(scanner_setup)
+    result = executable_command(command)
+    styl_log('Scanner setup result: {0}'.format(result))
+    if result == 0:
+        return Error.SUCCESS
+    else:
+        return Error.FAIL
 
 def check_update_emv_configure(emv_location, emv_flag):
     if not emv_location or not emv_flag:
@@ -180,50 +185,44 @@ if __name__ == '__main__':
 
     # Initialization I2C LED
     led_alert_init()
-    led_alert_set_all(LED_COLOR.OFF_COLOR)
+    led_alert_set_all(LED_COLOR.RUNNING_COLOR)
     systemd_workaround()
-	
-    # Check need run STYL Setup Scanner
-    state = check_running_setup_scanner(SCANNER_FLAG_PATH, SCANNER_FLAG)
-    if state:
-	state = setup_scanner_auto_mode(SCANNER_SETUP_UTILS_PATH, SCANNER_SETUP_UTILS)
-	command = 'echo  0 > {0}/{1}'.format(SCANNER_FLAG_PATH, SCANNER_FLAG)
-        result = exec_command(command)
-        os.system('sync')
-# Got Bug here
-#	if state == 0:
-#		styl_log('Execute Sacnner Setup success.')
-#	else:
-#		styl_log('Execute Sacnner Setup failed.')
-    else:
-	 styl_log('Scanner configure update flag: disable')
 
     # Check need update EMV configure and do it if needed
     state = check_update_emv_configure(EMV_LOCATION, EMV_FLAG)
-    if state:    
-        led_alert_set_all(LED_COLOR.RUNNING_COLOR)
+    if state:        
         styl_log('EMV configure update flag: enable')
         state = update_emv_configure(EMV_LOCATION, EMV_LOAD_CONFIG_SH, MD5_FILE)
-        led_alert_do(state, LED.EMV_UPDATE, 'EMV Configure Reload')
+        # Stop readersvcd service
+        update_emv_configure_systemd_service_togle(False)
         command = 'echo  0 > {0}/{1}'.format(EMV_LOCATION, EMV_FLAG)
         result = exec_command(command)
         os.system('sync')
-        led_alert_flicker(LED_COLOR.OFF_COLOR)
-        
-        # Stop readersvcd service
-        update_emv_configure_systemd_service_togle(False)
+        led_alert_done(state, LED.EMV, 'EMV Configure Reload')
     else:
         styl_log('EMV configure update flag: disable')
 
+    # Check need run STYL Setup Scanner
+    state = check_running_setup_scanner(SCANNER_FLAG_PATH, SCANNER_FLAG)
+    if state:
+        styl_log('Scanner configure update flag: enable')
+        state = setup_scanner_auto_mode(SCANNER_SETUP_UTILS_PATH, SCANNER_SETUP_UTILS)        
+        # Clear flag
+        command = 'echo  0 > {0}/{1}'.format(SCANNER_FLAG_PATH, SCANNER_FLAG)
+        result = exec_command(command)
+        os.system('sync')
+        led_alert_done(state, LED.SCANNER, 'Scanner Setup')
+    else:
+        styl_log('Scanner configure update flag: disable')
+
     # Check flag file for factory testool
     if find_file_in_path(TT_FLAGS, TT_FLAGS_DIR):
-        if execute_testtool_configure_do(TT_FLAGS, TT_FLAGS_DIR) == Error.FAIL:
-            styl_error('Execute Factory Testtool fail.')
-        else:
-            styl_log('Execute Factory Testtool success.')
+        state = execute_testtool_configure_do(TT_FLAGS, TT_FLAGS_DIR)
+        led_alert_done(state, LED.TESTTOOL, 'Factory Testtool Execute')
     else:
         styl_log('Factory Testtool was executed before.')    
 
+    led_alert_flash(LED_COLOR.OFF_COLOR, LED_COLOR.RUNNING_COLOR)
     led_alert_set_all(LED_COLOR.OFF_COLOR)
     styl_log('Exit extra service script .......')
 # ################################################################################################################################################## #

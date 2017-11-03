@@ -60,11 +60,11 @@ MD5_FILE                    = "checksum-md5"
 EMV_FLAG_PATH               = "/home/root/emv/update"
 
 # SCANNER global variable
-SCANNER_FLAG		    = "scanner_flag"
-SCANNER_FLAG_PATH	    = "/home/root/scanner/update"
-SCANNER_SETUP_UTILS_PATH    = "/usr/bin"
-SCANNER_SETUP_UTILS	    = "StylScannerSetup"
-SCANNER_PATTERN		    = "scanner_setup"
+SCANNER_FLAG		      = "scanner_flag"
+SCANNER_FLAG_PATH	      = "/home/root/scanner/update"
+SCANNER_SETUP_UTILS_PATH  = "/usr/bin"
+SCANNER_SETUP_UTILS	      = "StylScannerSetup"
+SCANNER_PATTERN		      = "scanner_setup"
 
 # TestTool global variable
 TT_PATTERN                  = "yellowfin_test_tool"
@@ -122,11 +122,11 @@ class LED_COLOR:
     RUNNING_COLOR = 0x07        # Write
 
 class LED:
-    AGPS            = 1
-    WIFI            = 2
-    EMV             = 3
-    EMV_UPDATE      = 4
-    TESTTOOL        = 5
+    AGPS            = 0x01  # Blue
+    WIFI            = 0x02  # Red
+    EMV             = 0x03  # Pink
+    SCANNER         = 0x04  # Green
+    TESTTOOL        = 0x05  # Cyan
 
 # DBUS global variable
 bus = dbus.SystemBus()
@@ -164,7 +164,7 @@ def styl_error(string):
     print '[STYL Extra Config Service]: {1}ERROR: {0} {2}'.format(string, bcolors.FAIL, bcolors.ENDC)
 
 def styl_warning(string):
-    print '[STYL Extra Config Service]: {1}ERROR: {0} {2}'.format(string, bcolors.WARNING, bcolors.ENDC)
+    print '[STYL Extra Config Service]: {1}WARNING: {0} {2}'.format(string, bcolors.WARNING, bcolors.ENDC)
 
 def styl_debug(string):
     print '[STYL Extra Config Service]: {1}DEBUG: {0} {2}'.format(string, bcolors.OKBLUE, bcolors.ENDC)
@@ -208,6 +208,13 @@ def exec_command(command):
     except:
         return None
 
+def executable_command(command):
+    try:
+        popen = subprocess.Popen(command, stdout=subprocess.PIPE)
+        return popen.wait()
+    except:
+        return -101
+
 def bash_command(command):
     try:
         result = subprocess.check_call(['bash', command])
@@ -233,6 +240,34 @@ def led_alert_init():
     except:
         styl_error('Initialization I2C LED : FAILURED')
 
+def led_alert_wave(show_color):
+    try:
+        light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
+        light_value = (light_value & 0x00F8) | show_color
+        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)
+        # effect for led 2
+        sleep(0.2)
+        light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
+        light_value = (light_value & 0x00C7) | (show_color << 3)
+        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)
+        # effect for led 3
+        sleep(0.2)
+        light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1);
+        light_value = (light_value & 0x00F8) | show_color
+        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value)
+    except:
+        styl_error('Wave I2C LED : FAILURED')
+
+def led_alert_flash(off_color, light_color):
+    try:
+        for i in xrange(0,2,1):
+            led_alert_set_all(off_color)
+            sleep(0.1)
+            led_alert_set_all(light_color)
+            sleep(0.1)
+    except:
+        styl_error('Flashing I2C LED : FAILURED')
+
 def led_alert_flicker(off_color):
     light_value_port0 = -1
     light_value_port1 = -1
@@ -240,57 +275,100 @@ def led_alert_flicker(off_color):
         light_value_port0 = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
         light_value_port1 = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1);
 
-        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, off_color)
-        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, off_color)
-        sleep(0.25)
-        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value_port0)
-        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value_port1)
-        sleep(0.25)
-        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, off_color)
-        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, off_color)
-        sleep(0.25)
-        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value_port0)
-        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value_port1)
-        sleep(0.25)
+        for i in xrange(0,2,1):
+            led_alert_set_all(off_color)
+            sleep(0.1)
+            msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value_port0)
+            msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value_port1)
+            sleep(0.1)
+
     except:
         styl_error('Flicker I2C LED : FAILURED')
 
-def led_alert_set(light_index, light_color):
-    light_value = -1
-    try:
-        if  light_index == LED.AGPS:
-            light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
-            light_value = (light_value & 0x00F8) | light_color
-            msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)
-        elif light_index == LED.WIFI:
-            light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
-            light_value = (light_value & 0x00C7) | (light_color << 3)
-            msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)
-        elif light_index == LED.EMV:
-            light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1);
-            light_value = (light_value & 0x00F8) | light_color
-            msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value)
-        elif light_index == LED.EMV_UPDATE:
-            led_alert_set_all(light_color)
+#def led_alert_set(light_index, light_color):
+#    light_value = -1
+#    try:
+#        if  light_index == LED.AGPS:
+#            light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
+#            light_value = (light_value & 0x00F8) | light_color
+#            msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)
+#        elif light_index == LED.WIFI:
+#            light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
+#            light_value = (light_value & 0x00C7) | (light_color << 3)
+#            msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)
+#        elif light_index == LED.EMV:
+#            light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1);
+#            light_value = (light_value & 0x00F8) | light_color
+#            msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value)
+        #elif light_index == LED.EMV_UPDATE:
+            #led_alert_set_all(light_color)
+        #    light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
+        #    light_value = (light_value & 0x00F8) | light_color
+        #    msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)
+        #elif light_index == LED.SCANNER:
+            #led_alert_wave(LED_COLOR.OFF_COLOR, light_color)
+        #elif light_index == LED.SCANNER_SETTING:
+        #    light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
+        #    light_value = (light_value & 0x00C7) | (light_color << 3)
+        #    msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)
 
-    except:
-        styl_error('Set light color for I2C LED : FAILURED')
+#    except:
+#        styl_error('Set light color for I2C LED : FAILURED')
 
 def led_alert_set_all(light_color):
-    led_alert_set(LED.AGPS, light_color)
-    led_alert_set(LED.WIFI, light_color)
-    led_alert_set(LED.EMV , light_color)
+    # LED 1
+    light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
+    light_value = (light_value & 0x00F8) | light_color
+    msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)
+    # LED 2
+    light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
+    light_value = (light_value & 0x00C7) | (light_color << 3)
+    msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)     
+    # LED 3
+    light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1);
+    light_value = (light_value & 0x00F8) | light_color
+    msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value)
 
-def led_alert_do(state, index, string):
+
+#def led_alert_do(state, index, string):
+#    if state == Error.FAIL:
+#        led_alert_set(index, LED_COLOR.FAILURE_COLOR)
+#        styl_error('Processing for {0} fail'.format(string))
+#    elif state == Error.SUCCESS:
+#        led_alert_set(index, LED_COLOR.SUCCESS_COLOR)
+#        styl_log('Processing for {0} success'.format(string))
+#    elif state == Error.NONE:
+#        led_alert_set(index, LED_COLOR.NONE_COLOR)
+#        styl_warning('Do not anything for {0}'.format(string))
+# ============================================================================================== #
+def led_alert_done(state, index_color, string):
     if state == Error.FAIL:
-        led_alert_set(index, LED_COLOR.FAILURE_COLOR)
-        styl_log('Processing for {0} fail'.format(string))
+        led_alert_apply(index_color, LED_COLOR.FAILURE_COLOR, LED_COLOR.OFF_COLOR)
+        styl_error('Processing for {0} failured'.format(string))
     elif state == Error.SUCCESS:
-        led_alert_set(index, LED_COLOR.SUCCESS_COLOR)
+        led_alert_apply(index_color, LED_COLOR.SUCCESS_COLOR, LED_COLOR.OFF_COLOR)
         styl_log('Processing for {0} success'.format(string))
     elif state == Error.NONE:
-        led_alert_set(index, LED_COLOR.NONE_COLOR)
-        styl_log('Do not anything for {0}'.format(string))
+        #led_alert_apply(index_color, LED_COLOR.NONE_COLOR, LED_COLOR.OFF_COLOR)
+        styl_warning('Do not anything for {0}'.format(string))
+# ============================================================================================== #
+def led_alert_apply(index_color, result_color, off_color):
+    try:
+        led_alert_set_all(off_color)
+        sleep(0.2)
+        led_alert_wave(index_color)
+        sleep(0.2)
+        for i in xrange(0,3,1):    
+            led_alert_set_all(off_color)       
+            sleep(0.1)
+            led_alert_set_all(result_color)
+            sleep(0.1)
+        sleep(1)
+    except:
+        styl_error('Set RUN color for I2C LED failured')
+# ============================================================================================== #
+# ============================================================================================== #
+
 
 # ################################################################################################################################################## #
 
