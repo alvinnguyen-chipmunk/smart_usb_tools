@@ -316,19 +316,21 @@ def led_alert_flicker(off_color):
 #        styl_error('Set light color for I2C LED : FAILURED')
 
 def led_alert_set_all(light_color):
-    # LED 1
-    light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
-    light_value = (light_value & 0x00F8) | light_color
-    msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)
-    # LED 2
-    light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
-    light_value = (light_value & 0x00C7) | (light_color << 3)
-    msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)     
-    # LED 3
-    light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1);
-    light_value = (light_value & 0x00F8) | light_color
-    msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value)
-
+    try:
+        # LED 1
+        light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
+        light_value = (light_value & 0x00F8) | light_color
+        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)
+        # LED 2
+        light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0);
+        light_value = (light_value & 0x00C7) | (light_color << 3)
+        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT0, light_value)     
+        # LED 3
+        light_value = msbus.read_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1);
+        light_value = (light_value & 0x00F8) | light_color
+        msbus.write_byte_data(STYL_LED_BOARD_I2C_ADDRESS, PD9535_OUT_REG_PORT1, light_value)
+    except:
+        styl_error('Set color I2C LED : FAILURED')
 
 #def led_alert_do(state, index, string):
 #    if state == Error.FAIL:
