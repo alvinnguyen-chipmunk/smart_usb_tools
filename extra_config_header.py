@@ -196,10 +196,13 @@ def get_from_shell_raw(command):
         return 'Error when execute "{0}"'.format(command)
 
 def get_from_shell(command):
-    result = get_from_shell_raw(command)
-    for i in range(len(result)):
-        result[i] = result[i].strip() # strip out white space #
-    return result
+    try:
+    	result = get_from_shell_raw(command)
+    	for i in range(len(result)):
+        	result[i] = result[i].strip() # strip out white space #
+    	return result
+    except:
+    	return None
 
 def exec_command(command):
     try:
