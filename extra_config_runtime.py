@@ -368,7 +368,7 @@ def device_event(device):
 
             elif state==Error.FAIL:
                 led_alert_set_all(LED_COLOR.MOUNT_COLOR)
-                styl_error('Mount parition failure.')
+                styl_error('Mount partition failure.')
             elif state==Error.NONE:
                 styl_log('Not found FAT partition in device.')
 

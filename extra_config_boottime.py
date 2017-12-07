@@ -43,11 +43,36 @@ def systemd_workaround():
 # ################################################################################################################################################## #
 
 # ################################################################################################################################################## #
-def update_emv_configure_systemd_service_togle(is_start):
-    global start_svc
-    systemd1 = bus.get_object('org.freedesktop.systemd1',  '/org/freedesktop/systemd1')
-    manager = dbus.Interface(systemd1, 'org.freedesktop.systemd1.Manager')
+def execute_emc_application_autorun(emc_app_flags, emc_app_flags_dir):
     try:
+        systemd1 = bus.get_object('org.freedesktop.systemd1',  '/org/freedesktop/systemd1')
+        manager = dbus.Interface(systemd1, 'org.freedesktop.systemd1.Manager')
+        
+        all_service = manager.ListUnits()
+
+        # Make sure that readerd systemd service was stoped.
+        for service_iter in all_service:
+            if service_iter[DBUS_STRUCT_NAME] == SYSTEMD_READER:
+                if service_iter[DBUS_STRUCT_ACTIVESTATE] == "active" and  service_iter[DBUS_STRUCT_SUBSTATE] == "running":
+                    styl_log("Readerd deamon is running. Will stop it for start EMC application.")
+                    manager.StopUnit(SYSTEMD_READER, 'replace')
+                    sleep(1)
+
+        # Start EMC application by systemd
+        manager.RestartUnit(SYSTEMD_EMC_APP, 'replace')
+
+        return Error.SUCCESS
+    except:
+        return Error.FAIL
+# ################################################################################################################################################## #
+
+# ################################################################################################################################################## #
+def update_emv_configure_systemd_service_togle(is_start):
+    try:
+        global start_svc
+        systemd1 = bus.get_object('org.freedesktop.systemd1',  '/org/freedesktop/systemd1')
+        manager = dbus.Interface(systemd1, 'org.freedesktop.systemd1.Manager')
+    
         if is_start:
             command = 'ps | grep -in "{0}" | grep -v grep'.format(SVC_APP)
             result = get_from_shell(command)
@@ -220,7 +245,14 @@ if __name__ == '__main__':
         state = execute_testtool_configure_do(TT_FLAGS, TT_FLAGS_DIR)
         led_alert_done(state, LED.TESTTOOL, 'Factory Testtool Execute')
     else:
-        styl_log('Factory Testtool was executed before.')    
+        styl_log('Factory Testtool is disabled.') 
+
+    # Check flag file for factory testool
+    if find_file_in_path(EMC_APP_FLAGS, EMC_APP_FLAGS_DIR):
+        state = execute_emc_application_autorun(EMC_APP_FLAGS, EMC_APP_FLAGS_DIR)
+        led_alert_done(state, LED.EMCAPP, 'EMC application execute')
+    else:
+        styl_log('EMC application is disabled.')
 
     led_alert_flash(LED_COLOR.OFF_COLOR, LED_COLOR.RUNNING_COLOR)
     led_alert_set_all(LED_COLOR.OFF_COLOR)

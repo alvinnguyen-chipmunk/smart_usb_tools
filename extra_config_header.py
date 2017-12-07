@@ -71,6 +71,10 @@ TT_PATTERN                  = "yellowfin_test_tool"
 TT_FLAGS_DIR                = "/var"
 TT_FLAGS                    = "factorytest.mrk"
 
+# EMC Application glocal variable
+EMC_APP_FLAGS_DIR             = "/var"
+EMC_APP_FLAGS                 = "emctest.mrk"
+
 # LED global variable
 STYL_LED_BOARD_I2C_ADDRESS  = 0x20
 PD9535_CONFIG_REG_PORT0     = 0x06
@@ -83,9 +87,11 @@ LDCONFIG_TOOL               = "/sbin/ldconfig"
 
 # Some daemon name
 SYSTEMD_READER_SVC          = "styl-readersvcd.service"
+SYSTEMD_READER              = "styl-readerd.service"
 SYSTEMD_APLAY               = "styl-aplayd.service"
 SYSTEMD_TESTTOOL            = "styl-factory-test-tool.service"
 SYSTEMD_EXTRASERVICE        = "styl-yellowfin-extra-config-runtime.service"
+SYSTEMD_EMC_APP             = "styl-emc-test-tool.service"
 
 # Index for DBUS Struct element
 # Visit https://www.freedesktop.org/wiki/Software/systemd/dbus/ for more index 
@@ -127,6 +133,7 @@ class LED:
     EMV             = 0x03  # Pink
     SCANNER         = 0x04  # Green
     TESTTOOL        = 0x05  # Cyan
+    EMCAPP          = 0x06  # Yellow
 
 # DBUS global variable
 bus = dbus.SystemBus()
